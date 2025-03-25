@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+import { ESP32RobotCardEditor } from "./editor.js";
 
 class ESP32RobotCard extends LitElement {
   static get properties() {
@@ -137,6 +138,17 @@ class ESP32RobotCard extends LitElement {
     this.config = config;
   }
 
+  static getConfigElement() {
+    return document.createElement("esp32-robot-card-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      entity: "sensor.esp32_robot_status",
+      title: "ESP32 Robot"
+    };
+  }
+
   getCardSize() {
     return 3;
   }
@@ -262,6 +274,7 @@ class ESP32RobotCard extends LitElement {
 
 customElements.define("esp32-robot-card", ESP32RobotCard);
 
+// Для HACS и регистрации карточки
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "esp32-robot-card",

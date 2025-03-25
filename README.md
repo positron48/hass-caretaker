@@ -60,20 +60,21 @@ After setup, a sensor entity will be created showing your robot's status. This s
 
 ### Custom Lovelace Card
 
-A custom Lovelace card is provided with this integration for convenient control of your robot:
+A custom Lovelace card is automatically registered with this integration. To add it to your dashboard:
 
 1. Go to your dashboard
 2. Click the "Edit Dashboard" button
 3. Click the "+" button to add a new card
-4. Scroll down to "Custom: ESP32 Robot Card"
-5. Select the ESP32 Robot sensor entity
-6. Optionally set a custom title
-7. Click "Save"
+4. Find "ESP32 Robot Card" in the list of cards
+5. Configure the card:
+   - Select the ESP32 Robot sensor entity
+   - Set an optional title
+6. Click "Save"
 
-The card will display:
-- Current status of your robot
-- Bluetooth status information
-- A button to open the robot's web interface in a modal overlay
+If the card doesn't appear in the list:
+1. Go to "Configuration" -> "Lovelace Dashboards" -> "Resources"
+2. Verify that `/esp32_robot/esp32-robot-card.js` is in the list
+3. If not, restart Home Assistant or add it manually
 
 ## License
 

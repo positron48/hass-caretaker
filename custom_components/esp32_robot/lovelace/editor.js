@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-class ESP32RobotCardEditor extends LitElement {
+export class ESP32RobotCardEditor extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
@@ -13,8 +13,7 @@ class ESP32RobotCardEditor extends LitElement {
     this._config = { ...config };
   }
 
-  connectedCallback() {
-    super.connectedCallback();
+  firstUpdated() {
     this._fetchEntities();
   }
 
@@ -108,11 +107,11 @@ class ESP32RobotCardEditor extends LitElement {
 
 customElements.define("esp32-robot-card-editor", ESP32RobotCardEditor);
 
+// Обратная совместимость для HACS
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "esp32-robot-card",
   name: "ESP32 Robot Card",
   description: "A card for controlling the ESP32 Robot",
-  preview: false,
-  configurable: true
+  preview: false
 }); 
