@@ -3,10 +3,10 @@
   "name": "ESP32 Robot",
   "documentation": "https://github.com/positron96/hass-esp32-robot",
   "issue_tracker": "https://github.com/positron96/hass-esp32-robot/issues",
-  "dependencies": [],
+  "dependencies": ["frontend", "http"],
   "codeowners": ["@positron96"],
   "requirements": [],
   "iot_class": "local_polling",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "config_flow": true
 } 

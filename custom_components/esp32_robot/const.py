@@ -25,3 +25,6 @@ CONF_SCAN_INTERVAL = "scan_interval"
 DEFAULT_SCAN_INTERVAL = 60  # 1 минута в секундах
 STATUS_ENDPOINT = "/bt/status"
 CONTROL_ENDPOINT = "/control" 
+
+# Пути для API и ресурсов
+ROOT_PATH = "/esp32_robot" 
