@@ -88,6 +88,11 @@ class ESP32RobotSensor(SensorEntity):
         self._host = entry.data.get(CONF_HOST) or entry.data.get(CONF_IP_ADDRESS)
         self._proxy_url = proxy_url
         self._direct_proxy_url = direct_proxy_url
+        
+        # Устанавливаем entity_id в формате, который ожидает карточка
+        self.entity_id = f"sensor.esp32_robot_status"
+        
+        # Устанавливаем уникальный ID, который используется для внутреннего хранения
         self._attr_unique_id = f"{DOMAIN}_{self._host}_status"
         self._attr_name = f"ESP32 Robot Status"
         self._attr_native_value = "unknown"
