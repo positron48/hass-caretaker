@@ -180,13 +180,21 @@ class ESP32RobotCard extends LitElement {
     // Запрашиваем состояние сущности робота
     if (hass && this.config) {
       const entityId = this.config.entity;
-      if (entityId) {
+      if (entityId && hass.states && entityId in hass.states) {
         this.entity = hass.states[entityId];
+      } else {
+        console.warn(`ESP32 Robot Card: Entity ${entityId} not found in hass.states`);
+        // Не устанавливаем entity, если его нет в hass.states
+        return;
       }
+    } else {
+      // Если нет hass или config, выходим
+      return;
     }
     
     // Проверяем, что entity существует и у него есть атрибуты
     if (!this.entity || !this.entity.attributes) {
+      console.warn("ESP32 Robot Card: Entity or attributes undefined");
       return; // Выходим из метода, если entity не определен
     }
     
@@ -198,8 +206,8 @@ class ESP32RobotCard extends LitElement {
       robotInterface = this.entity.attributes.direct_proxy_url;
     }
     
-    if (!this.iframe && robotInterface) {
-      // Создаем iframe, если URL доступен
+    if (!this.iframeUrl && robotInterface) {
+      // Создаем iframe URL, если URL доступен
       this.iframeUrl = `${window.location.protocol}//${window.location.host}${robotInterface}`;
     }
   }

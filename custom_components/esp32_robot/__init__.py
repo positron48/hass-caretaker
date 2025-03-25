@@ -138,6 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Регистрируем платформы
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
+    # Настраиваем карточку для Lovelace
+    await async_setup_card(hass, entry)
+    
     # Создаем сервис для управления роботом
     async def handle_control_service(call):
         """Handle the service call."""

@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, CONF_IP_ADDRESS
+from .const import DOMAIN, CONF_IP_ADDRESS, CONF_HOST, PROXY_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,12 +17,24 @@ IFRAME_SIGNAL = f"{DOMAIN}_iframe_signal"
 
 async def async_setup_card(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Set up the iframe service for the ESP32 Robot."""
-    ip_address = entry.data.get(CONF_IP_ADDRESS)
+    # Получаем данные для доступа к роботу
+    host = entry.data.get(CONF_HOST) or entry.data.get(CONF_IP_ADDRESS)
+    
+    # Получаем URL для доступа через прокси
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    proxy_url = entry_data.get(PROXY_URL)
     
     # Регистрируем сервис для открытия iframe
     async def open_iframe(call):
         """Open the iframe with the robot interface."""
-        url = f"http://{ip_address}/"
+        # Если есть прокси URL, используем его
+        if proxy_url:
+            url = f"{hass.config.internal_url}{proxy_url}"
+        else:
+            # Если нет прокси URL, используем прямой доступ по IP
+            url = f"http://{host}/"
+            
+        _LOGGER.debug(f"Opening iframe with URL: {url}")
         hass.helpers.dispatcher.async_dispatcher_send(IFRAME_SIGNAL, url)
         
     hass.services.async_register(
