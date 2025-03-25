@@ -7,6 +7,7 @@ class ESP32RobotCard extends LitElement {
       config: { type: Object },
       iframeOpened: { type: Boolean },
       iframeUrl: { type: String },
+      entity: { type: Object },
     };
   }
 
@@ -158,27 +159,36 @@ class ESP32RobotCard extends LitElement {
   }
 
   _toggleIframe() {
-    const entityId = this.config.entity;
-    const stateObj = this.hass.states[entityId];
-    
-    if (!stateObj) {
-      return;
-    }
-    
-    this.iframeUrl = stateObj.attributes.iframe_url;
     this.iframeOpened = !this.iframeOpened;
     
-    // Если iframe открыт и мы закрываем его - очищаем URL
-    if (!this.iframeOpened) {
-      setTimeout(() => {
-        this.iframeUrl = "";
-      }, 300);
+    if (this.iframeOpened && !this.iframeUrl && this.entity && this.entity.attributes) {
+      // Получаем URL для доступа к веб-интерфейсу робота
+      let url = this.entity.attributes.proxy_url;
+      
+      // Если настроен прямой доступ без авторизации, используем его
+      if (this.config.use_direct_url && this.entity.attributes.direct_proxy_url) {
+        url = this.entity.attributes.direct_proxy_url;
+      }
+      
+      if (url) {
+        this.iframeUrl = `${window.location.protocol}//${window.location.host}${url}`;
+      }
     }
   }
 
   async updated(hass) {
     // Запрашиваем состояние сущности робота
-    // ... existing code ...
+    if (hass && this.config) {
+      const entityId = this.config.entity;
+      if (entityId) {
+        this.entity = hass.states[entityId];
+      }
+    }
+    
+    // Проверяем, что entity существует и у него есть атрибуты
+    if (!this.entity || !this.entity.attributes) {
+      return; // Выходим из метода, если entity не определен
+    }
     
     // Получаем URL для доступа к веб-интерфейсу робота через прокси
     let robotInterface = this.entity.attributes.proxy_url;
@@ -189,7 +199,8 @@ class ESP32RobotCard extends LitElement {
     }
     
     if (!this.iframe && robotInterface) {
-      // ... existing iframe creation code ...
+      // Создаем iframe, если URL доступен
+      this.iframeUrl = `${window.location.protocol}//${window.location.host}${robotInterface}`;
     }
   }
 
@@ -217,10 +228,11 @@ class ESP32RobotCard extends LitElement {
     }
 
     const status = stateObj.state;
-    const btEnabled = stateObj.attributes.bt_enabled || false;
-    const btConnected = stateObj.attributes.bt_connected || false;
-    const btStatus = stateObj.attributes.bt_status || "Неизвестно";
-    const ipAddress = stateObj.attributes.ip_address || "";
+    const attrs = stateObj.attributes || {};
+    const btEnabled = attrs.bt_enabled || false;
+    const btConnected = attrs.bt_connected || false;
+    const btStatus = attrs.bt_status || "Неизвестно";
+    const ipAddress = attrs.host || attrs.ip_address || "";
     
     return html`
       <ha-card>
