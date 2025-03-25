@@ -9,6 +9,7 @@ This integration allows you to control and monitor your ESP32-CAM robot through 
 - Monitors robot availability and bluetooth status
 - Configurable status check interval
 - Custom Lovelace card with status display and robot control interface
+- Built-in proxy server for accessing your robot from external networks
 
 ## Installation
 
@@ -41,11 +42,23 @@ This integration allows you to control and monitor your ESP32-CAM robot through 
    - Scan interval (optional): How often to check robot status in seconds (default: 60)
 5. Click "Submit"
 
+## Proxy Server
+
+The integration includes a built-in proxy server that allows you to access your robot's web interface from outside your local network. When you add a robot to the integration, it's automatically registered with the proxy server. 
+
+This works as follows:
+- Your Home Assistant instance is accessible from the internet via your domain
+- The robot is only accessible on your local network
+- The integration acts as a middle-man, proxying all requests between the external client and the local robot
+
+All communication still passes through Home Assistant's authentication system, so your robot remains secure.
+
 ## API Endpoints
 
 The integration uses these API endpoints:
 
 - Status check: `http://<ip_address>/bt/status`
+- Proxy: `/api/esp32_robot_proxy/<robot-id>/`
 
 ## Usage
 
@@ -54,7 +67,8 @@ The integration uses these API endpoints:
 After setup, a sensor entity will be created showing your robot's status. This sensor includes attributes such as:
 
 - IP address
-- Iframe URL
+- Iframe URL (proxied)
+- Direct URL (local network only)
 - Bluetooth status
 - Bluetooth connection status
 

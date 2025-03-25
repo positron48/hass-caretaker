@@ -4,12 +4,16 @@ class ESP32RobotCard extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
-      config: { type: Object }
+      config: { type: Object },
+      iframeOpened: { type: Boolean },
+      iframeUrl: { type: String },
     };
   }
 
   constructor() {
     super();
+    this.iframeOpened = false;
+    this.iframeUrl = "";
   }
 
   static get styles() {
@@ -65,6 +69,49 @@ class ESP32RobotCard extends LitElement {
       .action-button:hover {
         background-color: var(--dark-primary-color);
       }
+      .iframe-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .iframe-modal {
+        width: 90vw;
+        height: 90vh;
+        max-width: 1200px;
+        background-color: var(--card-background-color);
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+      }
+      .iframe-modal iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+      .close-button {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background-color: var(--primary-color);
+        color: var(--text-primary-color);
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1;
+      }
     `;
   }
 
@@ -90,7 +137,7 @@ class ESP32RobotCard extends LitElement {
     return 3;
   }
 
-  _openInNewTab() {
+  _toggleIframe() {
     const entityId = this.config.entity;
     const stateObj = this.hass.states[entityId];
     
@@ -98,11 +145,14 @@ class ESP32RobotCard extends LitElement {
       return;
     }
     
-    const iframeUrl = stateObj.attributes.iframe_url;
+    this.iframeUrl = stateObj.attributes.iframe_url;
+    this.iframeOpened = !this.iframeOpened;
     
-    // Открываем в новом окне
-    if (iframeUrl) {
-      window.open(iframeUrl, '_blank', 'noreferrer,noopener');
+    // Если iframe открыт и мы закрываем его - очищаем URL
+    if (!this.iframeOpened) {
+      setTimeout(() => {
+        this.iframeUrl = "";
+      }, 300);
     }
   }
 
@@ -179,13 +229,24 @@ class ESP32RobotCard extends LitElement {
           
           <button 
             class="action-button" 
-            @click="${this._openInNewTab}"
+            @click="${this._toggleIframe}"
             ?disabled="${status !== 'online'}"
           >
-            ${status === 'online' ? 'Открыть управление' : 'Робот недоступен'}
+            ${status === 'online' ? (this.iframeOpened ? 'Закрыть управление' : 'Открыть управление') : 'Робот недоступен'}
           </button>
         </div>
       </ha-card>
+      
+      ${this.iframeOpened && this.iframeUrl ? html`
+        <div class="iframe-overlay" @click="${(e) => e.target === e.currentTarget && this._toggleIframe()}">
+          <div class="iframe-modal">
+            <button class="close-button" @click="${this._toggleIframe}">
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+            <iframe src="${this.iframeUrl}" allow="fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
+          </div>
+        </div>
+      ` : ''}
     `;
   }
 }

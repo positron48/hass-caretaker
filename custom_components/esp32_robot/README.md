@@ -2,6 +2,15 @@
 
 This integration allows you to control and monitor your ESP32-CAM robot through Home Assistant.
 
+## Proxy Server
+
+Эта интеграция включает встроенный прокси-сервер, который позволяет получить доступ к веб-интерфейсу вашего робота из внешней сети через Home Assistant. Прокси автоматически регистрирует роботов и перенаправляет все запросы.
+
+Это помогает решить проблему, когда:
+- Home Assistant доступен из интернета по вашему домену
+- Робот доступен только в локальной сети
+- Из интернета нет прямого доступа к локальной сети
+
 ## Manual Card Setup
 
 Для ручной настройки карточки, добавьте следующие ресурсы JavaScript:
@@ -29,9 +38,9 @@ entity: sensor.esp32_robot_status
 title: 'ESP32 Robot'
 ```
 
-### Открытие веб-интерфейса
+### Работа с iframe
 
-Для избежания проблем с iframe внутри Home Assistant, карточка теперь открывает веб-интерфейс ESP32 робота в новой вкладке при нажатии кнопки "Открыть управление".
+Карточка теперь использует прокси-URL для отображения веб-интерфейса робота внутри Home Assistant. Это позволяет управлять роботом даже при доступе к Home Assistant из внешней сети.
 
 ## Features
 
@@ -39,6 +48,7 @@ title: 'ESP32 Robot'
 - Shows Bluetooth information
 - Provides a button to open the robot's web interface
 - Full-screen modal for controlling your robot 
+- Proxy server for external access
 
 ## Changelog
 
