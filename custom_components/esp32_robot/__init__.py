@@ -12,7 +12,31 @@ from .const import DOMAIN, CONF_IP_ADDRESS, CONF_HOST, CONF_USERNAME, CONF_PASSW
 from .card import async_setup_card
 from .frontend import async_setup_frontend
 from .proxy import async_setup_proxy
-from .controller.robot_client import ESP32RobotClient
+
+# Если есть проблемы с импортом из .controller, используем временный класс-заглушку
+try:
+    from .controller.robot_client import ESP32RobotClient
+except ImportError:
+    _LOGGER = logging.getLogger(__name__)
+    _LOGGER.warning("Using fallback ESP32RobotClient implementation")
+    
+    class ESP32RobotClient:
+        """Fallback implementation of the ESP32 Robot client."""
+        
+        def __init__(self, host, username=None, password=None):
+            """Initialize the client."""
+            self.host = host
+            self.username = username
+            self.password = password
+            self.session = None
+            
+        async def get_status(self, hass=None):
+            """Get robot status."""
+            return {"status": "unknown", "error": "Using fallback implementation"}
+            
+        async def control(self, direction, speed=255, hass=None):
+            """Control robot movement."""
+            return {"status": "error", "message": "Using fallback implementation"}
 
 _LOGGER = logging.getLogger(__name__)
 

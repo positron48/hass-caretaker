@@ -27,7 +27,11 @@ class ESP32RobotClient:
     async def _get_session(self, hass):
         """Get or create aiohttp session."""
         if self.session is None:
-            self.session = async_get_clientsession(hass)
+            if hass is None:
+                # Создаем клиентскую сессию без привязки к Home Assistant
+                self.session = aiohttp.ClientSession()
+            else:
+                self.session = async_get_clientsession(hass)
         return self.session
         
     async def get_status(self, hass=None):

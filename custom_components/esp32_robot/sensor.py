@@ -12,8 +12,16 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, CONF_IP_ADDRESS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-from .service.robot_service import RobotService
+from .const import (
+    DOMAIN, 
+    CONF_IP_ADDRESS, 
+    CONF_HOST,
+    CONF_SCAN_INTERVAL, 
+    DEFAULT_SCAN_INTERVAL, 
+    DATA_CLIENT,
+    PROXY_URL,
+    DIRECT_PROXY_URL
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,27 +29,36 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up ESP32 Robot sensor based on a config entry."""
-    ip_address = entry.data.get(CONF_IP_ADDRESS)
+    # Получаем клиент API из данных компонента
+    if entry.entry_id not in hass.data[DOMAIN]:
+        _LOGGER.error(f"Entry {entry.entry_id} not found in {DOMAIN} data")
+        return
+        
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    api_client = entry_data.get(DATA_CLIENT)
+    if not api_client:
+        _LOGGER.error("API client not found")
+        return
+        
     scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     
-    # Получаем proxy_url если он доступен
-    proxy_url = entry.data.get("proxy_url")
-    
-    # Создаем сервис для бизнес-логики
-    robot_service = RobotService(hass, ip_address)
+    # Получаем URL для прокси
+    proxy_url = entry_data.get(PROXY_URL)
+    direct_proxy_url = entry_data.get(DIRECT_PROXY_URL)
     
     # Создаем координатор для обновления данных
-    coordinator = ESP32RobotCoordinator(hass, robot_service, scan_interval)
+    coordinator = ESP32RobotCoordinator(hass, api_client, scan_interval)
     await coordinator.async_config_entry_first_refresh()
     
-    async_add_entities([ESP32RobotSensor(coordinator, entry, proxy_url)])
+    async_add_entities([ESP32RobotSensor(coordinator, entry, proxy_url, direct_proxy_url)])
 
 class ESP32RobotCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ESP32 Robot data."""
 
-    def __init__(self, hass, robot_service, scan_interval):
+    def __init__(self, hass, api_client, scan_interval):
         """Initialize."""
-        self.robot_service = robot_service
+        self.api_client = api_client
+        self.hass = hass
         
         update_interval = timedelta(seconds=scan_interval)
         
@@ -55,7 +72,7 @@ class ESP32RobotCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from ESP32 Robot."""
         try:
-            return await self.robot_service.check_status()
+            return await self.api_client.get_status(self.hass)
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
         except Exception as err:
@@ -64,13 +81,14 @@ class ESP32RobotCoordinator(DataUpdateCoordinator):
 class ESP32RobotSensor(SensorEntity):
     """Representation of a ESP32 Robot sensor."""
 
-    def __init__(self, coordinator, entry, proxy_url=None):
+    def __init__(self, coordinator, entry, proxy_url=None, direct_proxy_url=None):
         """Initialize the sensor."""
         self.coordinator = coordinator
         self._entry = entry
-        self._ip_address = entry.data.get(CONF_IP_ADDRESS)
+        self._host = entry.data.get(CONF_HOST) or entry.data.get(CONF_IP_ADDRESS)
         self._proxy_url = proxy_url
-        self._attr_unique_id = f"{DOMAIN}_{self._ip_address}_status"
+        self._direct_proxy_url = direct_proxy_url
+        self._attr_unique_id = f"{DOMAIN}_{self._host}_status"
         self._attr_name = f"ESP32 Robot Status"
         self._attr_native_value = "unknown"
 
@@ -98,15 +116,19 @@ class ESP32RobotSensor(SensorEntity):
     def extra_state_attributes(self):
         """Return the state attributes."""
         attrs = {
-            "ip_address": self._ip_address,
+            "host": self._host,
         }
         
-        # Используем прокси-URL, если он доступен, иначе используем прямой URL
+        # Добавляем прокси URL
         if self._proxy_url:
-            attrs["iframe_url"] = self._proxy_url
-            attrs["direct_url"] = f"http://{self._ip_address}/"
-        else:
-            attrs["iframe_url"] = f"http://{self._ip_address}/"
+            attrs["proxy_url"] = self._proxy_url
+            
+        # Добавляем прямой прокси URL (без авторизации)
+        if self._direct_proxy_url:
+            attrs["direct_proxy_url"] = self._direct_proxy_url
+            
+        # Добавляем прямой URL к роботу
+        attrs["direct_url"] = f"http://{self._host}/"
             
         # Добавляем дополнительные данные из API, если они есть
         if self.coordinator.data and self.coordinator.data.get("status") == "online":
