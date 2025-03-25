@@ -23,4 +23,5 @@ DIRECT_PROXY_URL = "direct_proxy_url"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 DEFAULT_SCAN_INTERVAL = 60  # 1 минута в секундах
-STATUS_ENDPOINT = "/bt/status" 
+STATUS_ENDPOINT = "/bt/status"
+CONTROL_ENDPOINT = "/control" 

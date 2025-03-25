@@ -6,11 +6,13 @@ from homeassistant.core import HomeAssistant
 import asyncio
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN, CONF_IP_ADDRESS, CONF_HOST, CONF_USERNAME, CONF_PASSWORD, PROXY_VIEW, DATA_CLIENT, DATA_ENTITIES, PROXY_URL, DIRECT_PROXY_URL
 from .card import async_setup_card
 from .frontend import async_setup_frontend
 from .proxy import async_setup_proxy
+from .controller.robot_client import ESP32RobotClient
 
 _LOGGER = logging.getLogger(__name__)
 
