@@ -253,7 +253,7 @@ class ESP32RobotProxyView(HomeAssistantView):
         
         # Заменяем любые оставшиеся прямые ссылки к API эндпоинтам
         content = re.sub(
-            r'(["\'])(?:/(?:api|bt|stream|control|status)[^"\']*)["\']',
+            r'(["\'])(\/(?:api|bt|stream|control|status)[^"\']*)["\']',
             r'\1' + proxy_base + r'\2\1',
             content
         )
@@ -277,8 +277,8 @@ class ESP32RobotProxyView(HomeAssistantView):
                 if (typeof url !== 'string') return url;
                 
                 // Если это абсолютный URL с IP-адресом робота
-                if (url.match(/^https?:\/\/{re.escape(ip_address)}/)) {{
-                    return url.replace(/^https?:\/\/{re.escape(ip_address)}/, proxyBase);
+                if (url.match(/^https?:\\/\\/{re.escape(ip_address)}/)) {{
+                    return url.replace(/^https?:\\/\\/{re.escape(ip_address)}/, proxyBase);
                 }}
                 
                 // Если это относительный URL, начинающийся с /
