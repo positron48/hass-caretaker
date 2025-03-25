@@ -3,7 +3,7 @@ import logging
 import aiohttp
 from aiohttp import web
 import asyncio
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import re
 
 from homeassistant.components.http import HomeAssistantView
@@ -26,9 +26,8 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    # По умолчанию требуется аутентификация, но можно отключить через параметр
-    # requires_auth = True
-    requires_auth = False  # Отключаем аутентификацию - ВНИМАНИЕ: это снижает безопасность
+    # Для работы внутри Home Assistant через iframe требуется аутентификация
+    requires_auth = True
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
     
@@ -66,12 +65,26 @@ class ESP32RobotProxyView(HomeAssistantView):
         ip_address = self.robots[robot_id]
         robot_url = f"http://{ip_address}"
         
+        # Если path пустой, заменяем на "/"
+        if not path:
+            path = "/"
+            
+        # Если path не начинается с "/", добавляем его
+        if not path.startswith("/"):
+            path = "/" + path
+            
         # Конструируем URL для запроса к роботу
         target_url = urljoin(robot_url, path)
+        
+        # Логгируем запрос для отладки
+        _LOGGER.debug(f"Proxying {method} request to {target_url}")
         
         try:
             # Получаем тело запроса, если оно есть
             data = await request.read() if request.content_length else None
+            
+            # Получаем параметры запроса
+            params = request.query
             
             # Копируем заголовки запроса
             headers = {k: v for k, v in request.headers.items() 
@@ -82,14 +95,30 @@ class ESP32RobotProxyView(HomeAssistantView):
                 async with session.request(
                     method, 
                     target_url,
+                    params=params,
                     headers=headers,
                     data=data,
                     allow_redirects=False,
-                    timeout=10
+                    timeout=30  # Увеличиваем таймаут для видеопотока
                 ) as resp:
                     # Копируем заголовки ответа
                     resp_headers = {k: v for k, v in resp.headers.items()
                                    if k.lower() not in ('transfer-encoding',)}
+                    
+                    # Если это редирект, перенаправляем через прокси
+                    if resp.status in (301, 302, 303, 307, 308) and 'Location' in resp_headers:
+                        original_location = resp_headers['Location']
+                        
+                        # Преобразуем URL, если это относительный URL или URL того же хоста
+                        parsed_url = urlparse(original_location)
+                        if not parsed_url.netloc or parsed_url.netloc == ip_address:
+                            # Берем только path и query
+                            path_with_query = parsed_url.path
+                            if parsed_url.query:
+                                path_with_query += f"?{parsed_url.query}"
+                                
+                            # Обновляем Location в заголовках
+                            resp_headers['Location'] = f"{PROXY_BASE_PATH}/{robot_id}{path_with_query}"
                     
                     # Проверяем, нужно ли модифицировать контент с ссылками
                     is_text_content = True
@@ -100,12 +129,19 @@ class ESP32RobotProxyView(HomeAssistantView):
                             is_text_content = False
                             break
                     
+                    # Для потокового видео, просто проксируем данные
+                    if 'multipart/x-mixed-replace' in content_type:
+                        return web.StreamResponse(
+                            status=resp.status,
+                            headers=resp_headers,
+                        )
+                    
                     # Читаем ответ
                     if resp.status == 200 and is_text_content:
                         content = await resp.text()
                         
                         # Заменяем ссылки, чтобы они проходили через прокси
-                        content = self._rewrite_content(content, robot_id, robot_url)
+                        content = self._rewrite_content(content, robot_id, robot_url, ip_address)
                         
                         return web.Response(
                             status=resp.status,
@@ -130,22 +166,49 @@ class ESP32RobotProxyView(HomeAssistantView):
             _LOGGER.error(f"Unexpected error: {err}")
             return web.Response(status=500, text=f"Unexpected error: {err}")
             
-    def _rewrite_content(self, content, robot_id, robot_url):
+    def _rewrite_content(self, content, robot_id, robot_url, ip_address):
         """Rewrite URLs in content to use the proxy."""
         # Базовый URL прокси для этого робота
         proxy_base = f"{PROXY_BASE_PATH}/{robot_id}"
         
         # Заменяем абсолютные ссылки на ресурсы
         content = re.sub(
-            r'(src|href)=["\'](?:http://|https://)?(?:' + re.escape(robot_url.replace('http://', '')) + r')(/[^"\']*)["\']',
+            r'(src|href|action)=["\'](?:http://|https://)?(?:' + re.escape(robot_url.replace('http://', '')) + r')(/[^"\']*)["\']',
             r'\1="' + proxy_base + r'\2"',
+            content
+        )
+        
+        # Заменяем IP-адрес внутри текста
+        content = re.sub(
+            r'(["\'])(?:http://|https://)?(?:' + re.escape(ip_address) + r')(/[^"\']*)["\']',
+            r'\1' + proxy_base + r'\2\1',
             content
         )
         
         # Заменяем ссылки, начинающиеся с /
         content = re.sub(
-            r'(src|href)=["\'](/[^"\']*)["\']',
-            r'\1="' + proxy_base + r'\1"',
+            r'(src|href|action)=["\'](/[^"\']*)["\']',
+            r'\1="' + proxy_base + r'\2"',
+            content
+        )
+        
+        # Заменяем fetch и XMLHttpRequest URL в JavaScript
+        content = re.sub(
+            r'(fetch\(["\'])(/[^"\']+)(["\'])',
+            r'\1' + proxy_base + r'\2\3',
+            content
+        )
+        
+        content = re.sub(
+            r'(\.open\([^,]+,["\'])(/[^"\']+)(["\'])',
+            r'\1' + proxy_base + r'\2\3',
+            content
+        )
+        
+        # Заменяем WebSocket URL
+        content = re.sub(
+            r'(new WebSocket\(["\'])(?:ws://|wss://)?(?:' + re.escape(ip_address) + r')(/[^"\']*)["\']',
+            r'\1wss://" + window.location.host + "' + proxy_base + r'\2"',
             content
         )
         
@@ -156,13 +219,55 @@ class ESP32RobotProxyView(HomeAssistantView):
             content
         )
         
-        # Заменяем ссылки для API и WebSockets
+        # Заменяем любые оставшиеся прямые ссылки к API эндпоинтам
         content = re.sub(
-            r'["\'](?:http://|https://)?(?:' + re.escape(robot_url.replace('http://', '')) + r')(/[^"\']*)["\']',
-            r'"' + proxy_base + r'\1"',
+            r'(["\'])(?:/(?:api|bt|stream|control|status)[^"\']*)["\']',
+            r'\1' + proxy_base + r'\2\1',
             content
         )
         
+        # Добавляем JavaScript для перехвата динамически созданных запросов
+        intercept_js = f"""
+        <script>
+        (function() {{
+            // Хак для перехвата динамически созданных запросов
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {{
+                if (typeof url === 'string' && url.startsWith('/')) {{
+                    url = '{proxy_base}' + url;
+                }}
+                return originalFetch(url, options);
+            }};
+            
+            // Перехват XMLHttpRequest
+            const originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {{
+                if (typeof url === 'string' && url.startsWith('/')) {{
+                    url = '{proxy_base}' + url;
+                }}
+                return originalOpen.call(this, method, url, ...args);
+            }};
+            
+            // Перехват WebSocket
+            const originalWebSocket = window.WebSocket;
+            window.WebSocket = function(url, protocols) {{
+                if (typeof url === 'string' && url.startsWith('ws://')) {{
+                    // Заменяем ws:// на wss:// и домен на текущий
+                    const path = url.replace(/^ws:\/\/[^/]+/, '');
+                    url = 'wss://' + window.location.host + '{proxy_base}' + path;
+                }}
+                return new originalWebSocket(url, protocols);
+            }};
+        }})();
+        </script>
+        """
+        
+        # Добавляем наш JavaScript перед закрывающим тегом </body>
+        if '</body>' in content:
+            content = content.replace('</body>', intercept_js + '</body>')
+        else:
+            content += intercept_js
+            
         return content
 
 async def async_setup_proxy(hass: HomeAssistant):
