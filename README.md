@@ -76,6 +76,10 @@ If the card doesn't appear in the list:
 2. Verify that `/esp32_robot/esp32-robot-card.js` is in the list
 3. If not, restart Home Assistant or add it manually
 
+## Changelog
+
+See the [CHANGELOG.md](CHANGELOG.md) file for details about each release.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. 

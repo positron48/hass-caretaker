@@ -2,33 +2,36 @@
 
 This integration allows you to control and monitor your ESP32-CAM robot through Home Assistant.
 
-## Manual Card Setup (if card doesn't appear automatically)
+## Manual Card Setup
 
-If the ESP32 Robot Card doesn't appear in your list of available cards, you may need to add the JavaScript resources manually:
+Для ручной настройки карточки, добавьте следующие ресурсы JavaScript:
 
-1. Go to "Configuration" -> "Lovelace Dashboards"
-2. Click on "Resources" tab
-3. Click the "+" button to add a new resource
-4. Add the following resources:
-   - URL: `/esp32_robot/esp32-robot-card.js`, Type: JavaScript Module
-   - URL: `/esp32_robot/editor.js`, Type: JavaScript Module
-5. Restart Home Assistant
+1. Перейдите в "Configuration" -> "Lovelace Dashboards" -> "Resources"
+2. Нажмите "+" для добавления нового ресурса
+3. Добавьте ресурс:
+   - URL: `/esp32_robot/esp32-robot-card.js`
+   - Type: JavaScript Module
+4. Нажмите "Create"
+5. Перезагрузите Home Assistant
 
-## Adding the Card to Dashboard
+## Добавление карточки
 
-1. Go to any dashboard you want to add the card to
-2. Click "Edit Dashboard"
-3. Click "+" to add a new card
-4. Scroll down to "Manual" 
-5. Enter the following YAML:
+### Через интерфейс:
+
+1. Перейдите на панель (dashboard)
+2. Нажмите "Edit Dashboard"
+3. Нажмите "+" для добавления новой карточки
+4. Если карточка не появляется в списке, выберите "Manual" и вставьте:
 
 ```yaml
 type: 'custom:esp32-robot-card'
 entity: sensor.esp32_robot_status
-title: 'My ESP32 Robot' # Optional
+title: 'ESP32 Robot'
 ```
 
-6. Click "Save"
+### Открытие веб-интерфейса
+
+Для избежания проблем с iframe внутри Home Assistant, карточка теперь открывает веб-интерфейс ESP32 робота в новой вкладке при нажатии кнопки "Открыть управление".
 
 ## Features
 
@@ -36,3 +39,7 @@ title: 'My ESP32 Robot' # Optional
 - Shows Bluetooth information
 - Provides a button to open the robot's web interface
 - Full-screen modal for controlling your robot 
+
+## Changelog
+
+Полный список изменений в версиях доступен в файле [CHANGELOG.md](../../CHANGELOG.md). 
