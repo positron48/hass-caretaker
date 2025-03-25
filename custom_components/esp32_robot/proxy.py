@@ -26,7 +26,9 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    requires_auth = True
+    # По умолчанию требуется аутентификация, но можно отключить через параметр
+    # requires_auth = True
+    requires_auth = False  # Отключаем аутентификацию - ВНИМАНИЕ: это снижает безопасность
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
     

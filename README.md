@@ -51,7 +51,19 @@ This works as follows:
 - The robot is only accessible on your local network
 - The integration acts as a middle-man, proxying all requests between the external client and the local robot
 
-All communication still passes through Home Assistant's authentication system, so your robot remains secure.
+### Direct Access URL
+
+Starting from version 0.5.2, you can access your robot's web interface directly using the proxy URL without authentication:
+
+```
+https://your-home-assistant-domain/api/esp32_robot_proxy/<robot-id>/
+```
+
+The robot-id is automatically generated when you add the robot to Home Assistant.
+
+### Security Note
+
+Authentication for the proxy server has been disabled to allow direct access to the robot's web interface. This makes it easier to use but reduces security. If security is a concern, consider using the ESP32 Robot Card within Home Assistant instead, as it still benefits from Home Assistant's authentication system.
 
 ## API Endpoints
 
