@@ -107,11 +107,5 @@ class ESP32RobotCardEditor extends LitElement {
 
 customElements.define("esp32-robot-card-editor", ESP32RobotCardEditor);
 
-// Обратная совместимость для HACS
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "esp32-robot-card",
-  name: "ESP32 Robot Card",
-  description: "A card for controlling the ESP32 Robot",
-  preview: false
-}); 
+// Карточка регистрируется только в основном файле карточки (esp32-robot-card.js)
+// Удаляем дублирующую регистрацию здесь 
