@@ -3,8 +3,11 @@ import logging
 import hashlib
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+import asyncio
+import voluptuous as vol
+import homeassistant.helpers.config_validation as cv
 
-from .const import DOMAIN, CONF_IP_ADDRESS
+from .const import DOMAIN, CONF_IP_ADDRESS, CONF_HOST, CONF_USERNAME, CONF_PASSWORD, PROXY_VIEW, DATA_CLIENT, DATA_ENTITIES, PROXY_URL, DIRECT_PROXY_URL
 from .card import async_setup_card
 from .frontend import async_setup_frontend
 from .proxy import async_setup_proxy
@@ -27,33 +30,122 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ESP32 Robot from a config entry."""
+    # Получаем данные из конфигурации
+    host = entry.data.get(CONF_HOST, "")
+    username = entry.data.get(CONF_USERNAME, "")
+    password = entry.data.get(CONF_PASSWORD, "")
+    
+    # Создаем API-клиент
+    api = ESP32RobotClient(host, username, password)
+
+    # Проверяем соединение
+    try:
+        await api.get_status()
+    except Exception as e:
+        _LOGGER.error(f"Error connecting to ESP32 Robot: {e}")
+        raise ConfigEntryNotReady(f"Error connecting to ESP32 Robot: {e}")
+    
+    # Сохраняем данные в hass.data
     hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = {
+        DATA_CLIENT: api,
+        DATA_ENTITIES: [],
+    }
     
-    # Создаем ID робота из IP-адреса для использования в URL
-    ip_address = entry.data.get(CONF_IP_ADDRESS)
-    robot_id = hashlib.md5(ip_address.encode()).hexdigest()[:8]
-    
-    # Регистрируем робота в прокси
-    proxy = hass.data[DOMAIN].get("proxy")
-    if proxy:
-        proxy_url = proxy.register_robot(robot_id, ip_address)
-        _LOGGER.info(f"Registered robot {robot_id} with proxy at {proxy_url}")
+    # Настраиваем прокси сервер для доступа к веб-интерфейсу робота
+    if PROXY_VIEW not in hass.data.get(DOMAIN, {}):
+        proxy_view = await async_setup_proxy(hass)
+        hass.data[DOMAIN][PROXY_VIEW] = proxy_view
         
-        # Добавляем proxy_url в данные entry
-        entry_data = dict(entry.data)
-        entry_data["proxy_url"] = proxy_url
-        hass.config_entries.async_update_entry(entry, data=entry_data)
+        # Генерируем уникальный ID для робота на основе хоста и entry_id
+        robot_id = hashlib.md5(f"{host}-{entry.entry_id}".encode()).hexdigest()[:8]
+        
+        # Регистрируем робота в прокси
+        proxy_url = proxy_view.register_robot(robot_id, host)
+        
+        # Сохраняем URL прокси для доступа к роботу
+        hass.data[DOMAIN][entry.entry_id][PROXY_URL] = proxy_url
+        
+        # Регистрируем тот же робот в прямом прокси (без авторизации)
+        for handler in hass.http.app.router._resources:
+            if getattr(handler, 'resource_route', None) and handler.name == 'esp32_robot_direct':
+                direct_proxy_url = f"/robot/{robot_id}/"
+                hass.data[DOMAIN][entry.entry_id][DIRECT_PROXY_URL] = direct_proxy_url
+                _LOGGER.info(f"Registered robot at direct proxy URL: {direct_proxy_url}")
+                break
     else:
-        _LOGGER.warning("Proxy not available, robot will not be accessible from external networks")
+        proxy_view = hass.data[DOMAIN][PROXY_VIEW]
+        
+        # Генерируем уникальный ID для робота на основе хоста и entry_id
+        robot_id = hashlib.md5(f"{host}-{entry.entry_id}".encode()).hexdigest()[:8]
+        
+        # Регистрируем робота в прокси
+        proxy_url = proxy_view.register_robot(robot_id, host)
+        
+        # Сохраняем URL прокси для доступа к роботу
+        hass.data[DOMAIN][entry.entry_id][PROXY_URL] = proxy_url
+        
+        # Регистрируем тот же робот в прямом прокси (без авторизации)
+        for handler in hass.http.app.router._resources:
+            if getattr(handler, 'resource_route', None) and handler.name == 'esp32_robot_direct':
+                direct_proxy_url = f"/robot/{robot_id}/"
+                hass.data[DOMAIN][entry.entry_id][DIRECT_PROXY_URL] = direct_proxy_url
+                _LOGGER.info(f"Registered robot at direct proxy URL: {direct_proxy_url}")
+                break
     
-    hass.data[DOMAIN][entry.entry_id] = entry.data
-    
-    # Настраиваем платформы
+    # Регистрируем платформы
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
-    # Настраиваем карточку с iframe
-    await async_setup_card(hass, entry)
+    # Создаем сервис для управления роботом
+    async def handle_control_service(call):
+        """Handle the service call."""
+        direction = call.data.get("direction", "stop")
+        speed = call.data.get("speed", 255)
+        duration = call.data.get("duration", 0)
+        
+        entry_id = call.data.get("entry_id", None)
+        if entry_id is None:
+            # Если entry_id не указан, используем первый найденный робот
+            if not hass.data[DOMAIN]:
+                _LOGGER.error("No ESP32 Robot configured")
+                return
+            entry_id = list(hass.data[DOMAIN].keys())[0]
+            if entry_id == PROXY_VIEW:
+                entry_id = list(hass.data[DOMAIN].keys())[1]
+                
+        if entry_id not in hass.data[DOMAIN]:
+            _LOGGER.error(f"ESP32 Robot with entry_id {entry_id} not found")
+            return
+            
+        client = hass.data[DOMAIN][entry_id][DATA_CLIENT]
+        
+        try:
+            await client.control(direction, speed)
+            
+            if duration > 0:
+                # Если указана продолжительность, останавливаем робота после этого времени
+                async def stop_after_duration():
+                    await asyncio.sleep(duration)
+                    await client.control("stop")
+                    
+                asyncio.create_task(stop_after_duration())
+                
+        except Exception as e:
+            _LOGGER.error(f"Error controlling ESP32 Robot: {e}")
     
+    # Регистрируем сервис
+    hass.services.async_register(
+        DOMAIN, 
+        "control", 
+        handle_control_service, 
+        schema=vol.Schema({
+            vol.Optional("direction"): vol.In(["forward", "backward", "left", "right", "stop"]),
+            vol.Optional("speed"): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+            vol.Optional("duration"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Optional("entry_id"): vol.All(cv.string),
+        })
+    )
+
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

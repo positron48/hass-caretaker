@@ -119,7 +119,19 @@ class ESP32RobotCard extends LitElement {
     if (!config.entity) {
       throw new Error("You need to define an entity");
     }
-    this.config = config;
+    
+    this.config = {
+      title: "ESP32 Robot",
+      show_toolbar: true,
+      show_camera: true,
+      camera_fps: 5,
+      camera_quality: 80,
+      show_joy: true, 
+      width: "100%",
+      height: "auto",
+      use_direct_url: false,
+      ...config
+    };
   }
 
   static getConfigElement() {
@@ -127,9 +139,17 @@ class ESP32RobotCard extends LitElement {
   }
 
   static getStubConfig() {
-    return {
-      entity: "sensor.esp32_robot_status",
-      title: "ESP32 Robot"
+    return { 
+      entity: "",
+      title: "ESP32 Robot",
+      show_toolbar: true,
+      show_camera: true,
+      camera_fps: 5,
+      camera_quality: 80,
+      show_joy: true,
+      width: "100%",
+      height: "auto",
+      use_direct_url: false
     };
   }
 
@@ -153,6 +173,23 @@ class ESP32RobotCard extends LitElement {
       setTimeout(() => {
         this.iframeUrl = "";
       }, 300);
+    }
+  }
+
+  async updated(hass) {
+    // Запрашиваем состояние сущности робота
+    // ... existing code ...
+    
+    // Получаем URL для доступа к веб-интерфейсу робота через прокси
+    let robotInterface = this.entity.attributes.proxy_url;
+    
+    // Если настроен прямой доступ без авторизации, используем его
+    if (this.config.use_direct_url && this.entity.attributes.direct_proxy_url) {
+      robotInterface = this.entity.attributes.direct_proxy_url;
+    }
+    
+    if (!this.iframe && robotInterface) {
+      // ... existing iframe creation code ...
     }
   }
 

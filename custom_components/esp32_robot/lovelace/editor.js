@@ -10,7 +10,18 @@ class ESP32RobotCardEditor extends LitElement {
   }
 
   setConfig(config) {
-    this._config = { ...config };
+    this._config = {
+      title: "ESP32 Robot",
+      show_toolbar: true,
+      show_camera: true,
+      camera_fps: 5,
+      camera_quality: 80, 
+      show_joy: true,
+      width: "100%",
+      height: "auto",
+      use_direct_url: false,
+      ...config
+    };
   }
 
   firstUpdated() {
@@ -53,38 +64,176 @@ class ESP32RobotCardEditor extends LitElement {
     this.dispatchEvent(configChangeEvent);
   }
 
-  render() {
-    if (!this._config || !this.hass) {
-      return html``;
-    }
+  // Получаем список сущностей для выбора
+  get _entity() {
+    return this._config.entity || "";
+  }
 
-    if (!this._entities) {
-      this._fetchEntities();
+  // Получаем заголовок карточки
+  get _title() {
+    return this._config.title || "";
+  }
+
+  // Получаем настройки отображения элементов
+  get _show_toolbar() {
+    return this._config.show_toolbar !== false;
+  }
+
+  get _show_camera() {
+    return this._config.show_camera !== false;
+  }
+
+  get _camera_fps() {
+    return this._config.camera_fps || 5;
+  }
+
+  get _camera_quality() {
+    return this._config.camera_quality || 80;
+  }
+
+  get _show_joy() {
+    return this._config.show_joy !== false;
+  }
+
+  get _width() {
+    return this._config.width || "100%";
+  }
+
+  get _height() {
+    return this._config.height || "auto";
+  }
+  
+  get _use_direct_url() {
+    return this._config.use_direct_url === true;
+  }
+
+  render() {
+    if (!this.hass || !this._entities) {
+      return html`<div>Loading...</div>`;
     }
 
     return html`
       <div class="card-config">
-        <div class="field">
-          <ha-textfield
-            label="Заголовок (опционально)"
-            .value="${this._config.title || ''}"
+        <div class="config-row">
+          <ha-entity-picker
+            label="Entity"
+            .hass=${this.hass}
+            .value=${this._entity}
+            .configValue=${"entity"}
+            .includeDomains=${["sensor", "binary_sensor"]}
+            @change=${this._valueChanged}
+            allow-custom-entity
+          ></ha-entity-picker>
+        </div>
+
+        <div class="config-row">
+          <paper-input
+            label="Title"
+            .value=${this._title}
             .configValue=${"title"}
-            @input="${this._valueChanged}"
-          ></ha-textfield>
+            @value-changed=${this._valueChanged}
+          ></paper-input>
+        </div>
+
+        <div class="config-row">
+          <p>UI Controls</p>
+        </div>
+
+        <div class="config-row">
+          <ha-formfield label="Show Toolbar">
+            <ha-switch
+              .checked=${this._show_toolbar}
+              .configValue=${"show_toolbar"}
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
+
+        <div class="config-row">
+          <ha-formfield label="Show Camera">
+            <ha-switch
+              .checked=${this._show_camera}
+              .configValue=${"show_camera"}
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
+
+        <div class="config-row">
+          <ha-formfield label="Camera FPS">
+            <paper-input
+              label="FPS"
+              type="number"
+              min="1"
+              max="30"
+              .value=${this._camera_fps}
+              .configValue=${"camera_fps"}
+              @value-changed=${this._valueChanged}
+            ></paper-input>
+          </ha-formfield>
+        </div>
+
+        <div class="config-row">
+          <ha-formfield label="Camera Quality">
+            <paper-input
+              label="Quality"
+              type="number"
+              min="1"
+              max="100"
+              .value=${this._camera_quality}
+              .configValue=${"camera_quality"}
+              @value-changed=${this._valueChanged}
+            ></paper-input>
+          </ha-formfield>
+        </div>
+
+        <div class="config-row">
+          <ha-formfield label="Show Joystick">
+            <ha-switch
+              .checked=${this._show_joy}
+              .configValue=${"show_joy"}
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
+
+        <div class="config-row">
+          <p>Card Styling</p>
+        </div>
+
+        <div class="config-row">
+          <paper-input
+            label="Width"
+            .value=${this._width}
+            .configValue=${"width"}
+            @value-changed=${this._valueChanged}
+          ></paper-input>
+        </div>
+
+        <div class="config-row">
+          <paper-input
+            label="Height"
+            .value=${this._height}
+            .configValue=${"height"}
+            @value-changed=${this._valueChanged}
+          ></paper-input>
         </div>
         
-        <div class="field">
-          <ha-select
-            label="Сенсор ESP32 Robot"
-            .configValue=${"entity"}
-            .value="${this._config.entity || ''}"
-            @change="${this._valueChanged}"
-            required
-          >
-            ${this._entities && this._entities.map(entity => html`
-              <mwc-list-item .value="${entity.id}">${entity.name}</mwc-list-item>
-            `)}
-          </ha-select>
+        <div class="config-row">
+          <p>Advanced Options</p>
+        </div>
+        
+        <div class="config-row">
+          <ha-formfield label="Use Direct URL (no auth required)">
+            <ha-switch
+              .checked=${this._use_direct_url}
+              .configValue=${"use_direct_url"}
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </ha-formfield>
+          <div class="note">
+            Warning: This disables authentication for robot access.
+          </div>
         </div>
       </div>
     `;

@@ -5,9 +5,13 @@ from aiohttp import web
 import asyncio
 from urllib.parse import urljoin, urlparse
 import re
+import voluptuous as vol
 
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http import HomeAssistantView, KEY_HASS, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.components.http.auth import async_sign_path
+from homeassistant.components.http.ban import process_success_login
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,8 +30,9 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    # Для работы внутри Home Assistant через iframe требуется аутентификация
+    # Требуем авторизацию, но будем проверять и дополнительные методы
     requires_auth = True
+    cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
     
@@ -56,11 +61,33 @@ class ESP32RobotProxyView(HomeAssistantView):
     async def delete(self, request, robot_id, path):
         """Handle DELETE requests."""
         return await self._proxy_request(request, robot_id, path, 'DELETE')
-    
+        
+    def _check_authentication(self, request):
+        """Проверяем различные способы аутентификации."""
+        # Для iFrame внутри Home Assistant обычно передается авторизация автоматически
+        # через запрос, что обрабатывается стандартным механизмом Home Assistant
+        # (requires_auth = True)
+        
+        # Проверяем, установлен ли флаг аутентификации от Home Assistant
+        if KEY_AUTHENTICATED in request:
+            return request.get(KEY_AUTHENTICATED, False)
+        
+        # Проверяем cookie аутентификации от Home Assistant
+        if request.cookies.get("hass_auth"):
+            return True
+        
+        # Для тестовых целей можно добавить basic auth для ручного ввода
+        # с использованием имени/пароля Home Assistant
+        
+        return False
+        
     async def _proxy_request(self, request, robot_id, path, method):
         """Proxy a request to the robot."""
         if robot_id not in self.robots:
             return web.Response(status=404, text=f"Robot {robot_id} not found")
+            
+        # Не проверяем аутентификацию, если она уже проверена стандартным механизмом
+        # Home Assistant. Или если requests_auth = False, в этом случае проверять не нужно.
             
         ip_address = self.robots[robot_id]
         robot_url = f"http://{ip_address}"
@@ -131,10 +158,15 @@ class ESP32RobotProxyView(HomeAssistantView):
                     
                     # Для потокового видео, просто проксируем данные
                     if 'multipart/x-mixed-replace' in content_type:
-                        return web.StreamResponse(
+                        resp_obj = web.StreamResponse(
                             status=resp.status,
                             headers=resp_headers,
                         )
+                        await resp_obj.prepare(request)
+                        async for data in resp.content.iter_any():
+                            await resp_obj.write(data)
+                        await resp_obj.write_eof()
+                        return resp_obj
                     
                     # Читаем ответ
                     if resp.status == 200 and is_text_content:
@@ -230,34 +262,92 @@ class ESP32RobotProxyView(HomeAssistantView):
         intercept_js = f"""
         <script>
         (function() {{
+            console.log("ESP32 Robot proxy initializing...");
+            
+            // Проверяем, не запущен ли уже наш скрипт
+            if (window.ESP32_ROBOT_PROXY_INITIALIZED) return;
+            window.ESP32_ROBOT_PROXY_INITIALIZED = true;
+            
+            // Базовый URL для прокси
+            const proxyBase = '{proxy_base}';
+            console.log("Using proxy base: " + proxyBase);
+            
+            // Функция для преобразования URL
+            function rewriteUrl(url) {{
+                if (typeof url !== 'string') return url;
+                
+                // Если это абсолютный URL с IP-адресом робота
+                if (url.match(/^https?:\/\/{re.escape(ip_address)}/)) {{
+                    return url.replace(/^https?:\/\/{re.escape(ip_address)}/, proxyBase);
+                }}
+                
+                // Если это относительный URL, начинающийся с /
+                if (url.startsWith('/')) {{
+                    return proxyBase + url;
+                }}
+                
+                return url;
+            }}
+            
             // Хак для перехвата динамически созданных запросов
             const originalFetch = window.fetch;
             window.fetch = function(url, options) {{
-                if (typeof url === 'string' && url.startsWith('/')) {{
-                    url = '{proxy_base}' + url;
-                }}
+                url = rewriteUrl(url);
+                console.log("Proxying fetch to:", url);
                 return originalFetch(url, options);
             }};
             
             // Перехват XMLHttpRequest
             const originalOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function(method, url, ...args) {{
-                if (typeof url === 'string' && url.startsWith('/')) {{
-                    url = '{proxy_base}' + url;
-                }}
+                url = rewriteUrl(url);
+                console.log("Proxying XHR to:", url);
                 return originalOpen.call(this, method, url, ...args);
             }};
             
             // Перехват WebSocket
-            const originalWebSocket = window.WebSocket;
-            window.WebSocket = function(url, protocols) {{
-                if (typeof url === 'string' && url.startsWith('ws://')) {{
-                    // Заменяем ws:// на wss:// и домен на текущий
-                    const path = url.replace(/^ws:\/\/[^/]+/, '');
-                    url = 'wss://' + window.location.host + '{proxy_base}' + path;
-                }}
-                return new originalWebSocket(url, protocols);
-            }};
+            if (window.WebSocket) {{
+                const originalWebSocket = window.WebSocket;
+                window.WebSocket = function(url, protocols) {{
+                    if (typeof url === 'string') {{
+                        if (url.startsWith('ws://')) {{
+                            // Заменяем ws:// на wss:// и домен на текущий
+                            const path = url.replace(/^ws:\/\/[^/]+/, '');
+                            url = 'wss://' + window.location.host + proxyBase + path;
+                            console.log("Proxying WebSocket to:", url);
+                        }}
+                    }}
+                    return new originalWebSocket(url, protocols);
+                }};
+                window.WebSocket.prototype = originalWebSocket.prototype;
+                window.WebSocket.CONNECTING = originalWebSocket.CONNECTING;
+                window.WebSocket.OPEN = originalWebSocket.OPEN;
+                window.WebSocket.CLOSING = originalWebSocket.CLOSING;
+                window.WebSocket.CLOSED = originalWebSocket.CLOSED;
+            }}
+            
+            // Перехват EventSource для Server-Sent Events
+            if (window.EventSource) {{
+                const originalEventSource = window.EventSource;
+                window.EventSource = function(url, options) {{
+                    url = rewriteUrl(url);
+                    console.log("Proxying EventSource to:", url);
+                    return new originalEventSource(url, options);
+                }};
+                window.EventSource.prototype = originalEventSource.prototype;
+            }}
+            
+            // Добавляем обработчики для AJAX-запросов jQuery, если jQuery доступен
+            if (window.jQuery) {{
+                jQuery(document).ajaxSend(function(event, jqxhr, settings) {{
+                    if (typeof settings.url === 'string' && settings.url.startsWith('/')) {{
+                        settings.url = proxyBase + settings.url;
+                        console.log("Proxying jQuery AJAX to:", settings.url);
+                    }}
+                }});
+            }}
+            
+            console.log("ESP32 Robot proxy initialized successfully");
         }})();
         </script>
         """
@@ -270,8 +360,43 @@ class ESP32RobotProxyView(HomeAssistantView):
             
         return content
 
+class ESP32RobotDirectProxyView(HomeAssistantView):
+    """View to provide direct access to ESP32 Robot without authentication."""
+    
+    requires_auth = False  # Для прямого доступа без авторизации
+    url = "/robot/{robot_id}/{path:.*}"
+    name = "esp32_robot_direct"
+    
+    def __init__(self, hass, proxy_view):
+        """Initialize the direct proxy view."""
+        self.hass = hass
+        self.proxy_view = proxy_view
+        
+    async def get(self, request, robot_id, path):
+        """Handle GET requests."""
+        # Перенаправляем запрос на основной прокси, но без авторизации
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'GET')
+        
+    async def post(self, request, robot_id, path):
+        """Handle POST requests."""
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'POST')
+        
+    async def put(self, request, robot_id, path):
+        """Handle PUT requests."""
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'PUT')
+        
+    async def delete(self, request, robot_id, path):
+        """Handle DELETE requests."""
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'DELETE')
+
 async def async_setup_proxy(hass: HomeAssistant):
     """Set up the proxy server for ESP32 Robot."""
     proxy_view = ESP32RobotProxyView(hass)
     hass.http.register_view(proxy_view)
+    
+    # Регистрируем также прямой доступ без авторизации
+    # Этот URL можно использовать для доступа без авторизации, например через мобильное приложение
+    direct_proxy_view = ESP32RobotDirectProxyView(hass, proxy_view)
+    hass.http.register_view(direct_proxy_view)
+    
     return proxy_view 
