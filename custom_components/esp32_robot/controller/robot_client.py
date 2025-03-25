@@ -43,6 +43,11 @@ class ESP32RobotClient:
         - bt_connected: bool
         - bt_status: str
         """
+        # Проверяем, что хост задан и не пустой
+        if not self.host:
+            _LOGGER.error("Host is empty, cannot perform API request")
+            return {"status": "unknown", "error": "Host not configured"}
+            
         session = await self._get_session(hass)
         
         try:
@@ -82,6 +87,11 @@ class ESP32RobotClient:
         Returns:
             dict: Response from the robot
         """
+        # Проверяем, что хост задан и не пустой
+        if not self.host:
+            _LOGGER.error("Host is empty, cannot perform API request")
+            return {"status": "error", "message": "Host not configured"}
+            
         session = await self._get_session(hass)
         
         try:

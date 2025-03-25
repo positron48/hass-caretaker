@@ -58,6 +58,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ESP32 Robot from a config entry."""
     # Получаем данные из конфигурации
     host = entry.data.get(CONF_HOST, "")
+    
+    # Обратная совместимость: используем IP_ADDRESS, если HOST пустой
+    if not host and entry.data.get(CONF_IP_ADDRESS):
+        host = entry.data.get(CONF_IP_ADDRESS)
+        _LOGGER.info(f"Using IP_ADDRESS '{host}' as HOST for backward compatibility")
+        
+        # Обновляем данные конфигурации для будущих запусков
+        new_data = dict(entry.data)
+        new_data[CONF_HOST] = host
+        hass.config_entries.async_update_entry(entry, data=new_data)
+    
+    # Проверяем, что хост не пустой
+    if not host:
+        _LOGGER.error("Host or IP address is not configured")
+        return False
+        
     username = entry.data.get(CONF_USERNAME, "")
     password = entry.data.get(CONF_PASSWORD, "")
     
@@ -179,10 +195,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     
     if unload_ok:
-        # Удаляем робота из прокси
-        ip_address = entry.data.get(CONF_IP_ADDRESS)
-        robot_id = hashlib.md5(ip_address.encode()).hexdigest()[:8]
+        # Получаем хост для генерации ID
+        host = entry.data.get(CONF_HOST) or entry.data.get(CONF_IP_ADDRESS)
+        if not host:
+            _LOGGER.warning("Host not found in entry data, cannot unregister from proxy")
+            return unload_ok
+            
+        # Генерируем ID робота
+        robot_id = hashlib.md5(f"{host}-{entry.entry_id}".encode()).hexdigest()[:8]
         
+        # Удаляем робота из прокси
         proxy = hass.data[DOMAIN].get("proxy")
         if proxy and robot_id in proxy.robots:
             del proxy.robots[robot_id]
