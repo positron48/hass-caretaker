@@ -97,6 +97,12 @@ class ESP32RobotProxyView(HomeAssistantView):
         # Конструируем URL для запроса к роботу
         target_url = urljoin(robot_url, path)
         
+        # Для потоковых запросов убираем таймаут совсем
+        if 'stream' in path:
+            timeout = None  # Без ограничения по времени
+        else:
+            timeout = 10  # Стандартный таймаут для обычных запросов
+        
         # Логгируем запрос для отладки
         _LOGGER.debug(f"Proxying {method} request to {target_url}")
         
@@ -120,7 +126,7 @@ class ESP32RobotProxyView(HomeAssistantView):
                     headers=headers,
                     data=data,
                     allow_redirects=False,
-                    timeout=10
+                    timeout=timeout
                 ) as resp:
                     # Копируем заголовки ответа
                     resp_headers = {k: v for k, v in resp.headers.items()
@@ -144,17 +150,54 @@ class ESP32RobotProxyView(HomeAssistantView):
                     # Проверяем тип контента
                     content_type = resp.headers.get('Content-Type', '').lower()
                     
-                    # Для потокового видео, просто проксируем данные
-                    if 'multipart/x-mixed-replace' in content_type:
-                        resp_obj = web.StreamResponse(
-                            status=resp.status,
-                            headers=resp_headers,
-                        )
-                        await resp_obj.prepare(request)
-                        async for data in resp.content.iter_any():
-                            await resp_obj.write(data)
-                        await resp_obj.write_eof()
-                        return resp_obj
+                    # Определяем, является ли это потоковым запросом
+                    is_stream_request = (
+                        'stream' in path or 
+                        'multipart/x-mixed-replace' in content_type or
+                        'text/event-stream' in content_type or
+                        'video/' in content_type or
+                        resp.headers.get('Transfer-Encoding', '') == 'chunked'
+                    )
+                    
+                    # Для потоковых данных используем StreamResponse
+                    if is_stream_request:
+                        try:
+                            # Устанавливаем правильные заголовки
+                            if 'Content-Type' in resp_headers:
+                                content_type = resp_headers['Content-Type']
+                            else:
+                                content_type = 'application/octet-stream'
+                                
+                            # Создаем потоковый ответ
+                            resp_obj = web.StreamResponse(
+                                status=resp.status,
+                                headers=resp_headers,
+                            )
+                            
+                            # Увеличиваем размер буфера для потоковых данных
+                            resp_obj._payload_writer._drain_waiter = None
+                            
+                            # Подготавливаем ответ
+                            await resp_obj.prepare(request)
+                            
+                            # Передаем данные чанками с обработкой исключений
+                            try:
+                                buffer_size = 4096  # Оптимальный размер буфера
+                                async for data in resp.content.iter_chunked(buffer_size):
+                                    await resp_obj.write(data)
+                                    # Небольшая пауза для предотвращения переполнения буфера
+                                    await asyncio.sleep(0.001)
+                            except (asyncio.CancelledError, aiohttp.ClientPayloadError) as e:
+                                _LOGGER.debug(f"Stream interrupted: {e}")
+                            except Exception as e:
+                                _LOGGER.error(f"Error during streaming: {e}")
+                            finally:
+                                # Всегда закрываем поток корректно
+                                await resp_obj.write_eof()
+                            return resp_obj
+                        except Exception as stream_err:
+                            _LOGGER.error(f"Stream setup error: {stream_err}")
+                            return web.Response(status=500, text=f"Stream error: {stream_err}")
                     
                     # Определяем, нужно ли модифицировать контент
                     is_html_content = 'text/html' in content_type
