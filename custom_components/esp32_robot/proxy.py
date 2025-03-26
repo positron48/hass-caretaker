@@ -12,7 +12,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.http.ban import process_success_login
-from homeassistant.components.http.auth import async_user_not_allowed_do_auth
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,8 +30,8 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    # Отключаем обязательную аутентификацию для обработки её вручную
-    requires_auth = False
+    # Включаем обязательную аутентификацию
+    requires_auth = True
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
@@ -45,91 +44,40 @@ class ESP32RobotProxyView(HomeAssistantView):
     def register_robot(self, robot_id, ip_address):
         """Register a robot for proxying."""
         self.robots[robot_id] = ip_address
-        # Создаем подписанный URL с токеном
-        signed_path = async_sign_path(
-            self.hass, PROXY_BASE_PATH + f"/{robot_id}/"
-        )
-        _LOGGER.info(f"Registered robot with signed URL: {signed_path}")
-        return signed_path
+        return f"{PROXY_BASE_PATH}/{robot_id}/"
         
     async def get(self, request, robot_id, path):
         """Handle GET requests."""
-        # Проверяем аутентификацию вручную
-        if not self._check_authentication(request):
-            # Если аутентификация не прошла, возвращаем ошибку
-            return await async_user_not_allowed_do_auth(self.hass, request)
-            
         return await self._proxy_request(request, robot_id, path, 'GET')
         
     async def post(self, request, robot_id, path):
         """Handle POST requests."""
-        # Проверяем аутентификацию вручную
-        if not self._check_authentication(request):
-            # Если аутентификация не прошла, возвращаем ошибку
-            return await async_user_not_allowed_do_auth(self.hass, request)
-            
         return await self._proxy_request(request, robot_id, path, 'POST')
         
     async def put(self, request, robot_id, path):
         """Handle PUT requests."""
-        # Проверяем аутентификацию вручную
-        if not self._check_authentication(request):
-            # Если аутентификация не прошла, возвращаем ошибку
-            return await async_user_not_allowed_do_auth(self.hass, request)
-            
         return await self._proxy_request(request, robot_id, path, 'PUT')
         
     async def delete(self, request, robot_id, path):
         """Handle DELETE requests."""
-        # Проверяем аутентификацию вручную
-        if not self._check_authentication(request):
-            # Если аутентификация не прошла, возвращаем ошибку
-            return await async_user_not_allowed_do_auth(self.hass, request)
-            
         return await self._proxy_request(request, robot_id, path, 'DELETE')
         
     def _check_authentication(self, request):
         """Проверяем различные способы аутентификации."""
         # Для iFrame внутри Home Assistant обычно передается авторизация автоматически
         # через запрос, что обрабатывается стандартным механизмом Home Assistant
-        
-        # Для внутренних запросов всегда разрешаем доступ
-        # Проверяем, является ли запрос внутренним (от самого Home Assistant)
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if not forwarded_for or forwarded_for.startswith("127.0.0.1") or forwarded_for.startswith("::1"):
-            return True
-            
-        # Проверяем по IP-адресу клиента, если он в локальной сети, то разрешаем доступ
-        remote_addr = request.remote
-        if remote_addr and (remote_addr.startswith("127.") or remote_addr.startswith("192.168.") 
-                           or remote_addr.startswith("10.") or remote_addr.startswith("::1")):
-            return True
+        # (requires_auth = True)
         
         # Проверяем, установлен ли флаг аутентификации от Home Assistant
-        if KEY_AUTHENTICATED in request and request.get(KEY_AUTHENTICATED, False):
-            return True
+        if KEY_AUTHENTICATED in request:
+            return request.get(KEY_AUTHENTICATED, False)
         
         # Проверяем cookie аутентификации от Home Assistant
         if request.cookies.get("hass_auth"):
             return True
-            
-        # Проверяем токен в URL-параметрах (из async_sign_path)
-        query_params = request.query
-        if 'token' in query_params:
-            hass = request.get(KEY_HASS)
-            if hass:
-                try:
-                    # Проверяем токен через Home Assistant
-                    claims = hass.auth.async_validate_access_token(query_params['token'])
-                    if claims:
-                        return True
-                except Exception as e:
-                    _LOGGER.warning(f"Token validation error: {e}")
         
-        # На сервере разработки всегда разрешаем доступ
-        if self.hass.config.safe_mode or self.hass.config.debug:
-            _LOGGER.warning("Safe mode or debug enabled, allowing access without authentication")
-            return True
+        # Для тестовых целей можно добавить basic auth для ручного ввода
+        # с использованием имени/пароля Home Assistant
         
         return False
         
@@ -409,9 +357,43 @@ class ESP32RobotProxyView(HomeAssistantView):
             
         return content
 
+class ESP32RobotDirectProxyView(HomeAssistantView):
+    """View to provide direct access to ESP32 Robot without authentication."""
+    
+    requires_auth = False  # Для прямого доступа без авторизации
+    url = "/robot/{robot_id}/{path:.*}"
+    name = "esp32_robot_direct"
+    
+    def __init__(self, hass, proxy_view):
+        """Initialize the direct proxy view."""
+        self.hass = hass
+        self.proxy_view = proxy_view
+        
+    async def get(self, request, robot_id, path):
+        """Handle GET requests."""
+        # Перенаправляем запрос на основной прокси, но без авторизации
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'GET')
+        
+    async def post(self, request, robot_id, path):
+        """Handle POST requests."""
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'POST')
+        
+    async def put(self, request, robot_id, path):
+        """Handle PUT requests."""
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'PUT')
+        
+    async def delete(self, request, robot_id, path):
+        """Handle DELETE requests."""
+        return await self.proxy_view._proxy_request(request, robot_id, path, 'DELETE')
+
 async def async_setup_proxy(hass: HomeAssistant):
     """Set up the proxy server for ESP32 Robot."""
     proxy_view = ESP32RobotProxyView(hass)
     hass.http.register_view(proxy_view)
+    
+    # Регистрируем также прямой доступ без авторизации
+    # Этот URL можно использовать для доступа без авторизации, например через мобильное приложение
+    direct_proxy_view = ESP32RobotDirectProxyView(hass, proxy_view)
+    hass.http.register_view(direct_proxy_view)
     
     return proxy_view 
