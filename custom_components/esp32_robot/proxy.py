@@ -196,60 +196,64 @@ class ESP32RobotProxyView(HomeAssistantView):
         """Rewrite URLs in content to use the proxy."""
         # Базовый URL прокси для этого робота
         proxy_base = f"{PROXY_BASE_PATH}/{robot_id}"
+        ip_address = self.robots[robot_id]
+        
+        # Функция для проверки, не содержит ли URL уже прокси-путь
+        def is_already_proxied(url):
+            return proxy_base in url
         
         # Заменяем абсолютные ссылки на ресурсы
         content = re.sub(
             r'(src|href|action)=["\'](?:http://|https://)?(?:' + re.escape(robot_url.replace('http://', '')) + r')(/[^"\']*)["\']',
-            r'\1="' + proxy_base + r'\2"',
+            lambda m: f'{m.group(1)}="{proxy_base}{m.group(2)}"' if not is_already_proxied(m.group(0)) else m.group(0),
             content
         )
         
         # Заменяем IP-адрес внутри текста
-        ip_address = self.robots[robot_id]
         content = re.sub(
             r'(["\'])(?:http://|https://)?(?:' + re.escape(ip_address) + r')(/[^"\']*)["\']',
-            r'\1' + proxy_base + r'\2\1',
+            lambda m: f'{m.group(1)}{proxy_base}{m.group(2)}{m.group(1)}' if not is_already_proxied(m.group(0)) else m.group(0),
             content
         )
         
         # Заменяем ссылки, начинающиеся с /
         content = re.sub(
             r'(src|href|action)=["\'](/[^"\']*)["\']',
-            r'\1="' + proxy_base + r'\2"',
+            lambda m: f'{m.group(1)}="{proxy_base}{m.group(2)}"' if not is_already_proxied(m.group(0)) and not m.group(2).startswith(f"{PROXY_BASE_PATH}/{robot_id}") else m.group(0),
             content
         )
         
         # Заменяем fetch и XMLHttpRequest URL в JavaScript
         content = re.sub(
             r'(fetch\(["\'])(/[^"\']+)(["\'])',
-            r'\1' + proxy_base + r'\2\3',
+            lambda m: f'{m.group(1)}{proxy_base}{m.group(2)}{m.group(3)}' if not m.group(2).startswith(proxy_base) else m.group(0),
             content
         )
         
         content = re.sub(
             r'(\.open\([^,]+,["\'])(/[^"\']+)(["\'])',
-            r'\1' + proxy_base + r'\2\3',
+            lambda m: f'{m.group(1)}{proxy_base}{m.group(2)}{m.group(3)}' if not m.group(2).startswith(proxy_base) else m.group(0),
             content
         )
         
         # Заменяем WebSocket URL
         content = re.sub(
             r'(new WebSocket\(["\'])(?:ws://|wss://)?(?:' + re.escape(ip_address) + r')(/[^"\']*)["\']',
-            r'\1wss://" + window.location.host + "' + proxy_base + r'\2"',
+            lambda m: f'{m.group(1)}wss://" + window.location.host + "{proxy_base}{m.group(2)}"' if not is_already_proxied(m.group(0)) else m.group(0),
             content
         )
         
         # Заменяем ссылки в CSS
         content = re.sub(
             r'url\(["\']?(?:http://|https://)?(?:' + re.escape(robot_url.replace('http://', '')) + r')?(/[^"\'\)]*)["\']?\)',
-            r'url("' + proxy_base + r'\1")',
+            lambda m: f'url("{proxy_base}{m.group(1)}")' if not is_already_proxied(m.group(0)) else m.group(0),
             content
         )
         
         # Заменяем любые оставшиеся прямые ссылки к API эндпоинтам
         content = re.sub(
             r'(["\'])(\/(?:api|bt|stream|control|status)[^"\']*)["\']',
-            r'\1' + proxy_base + r'\2\1',
+            lambda m: f'{m.group(1)}{proxy_base}{m.group(2)}{m.group(1)}' if not m.group(2).startswith(proxy_base) and not is_already_proxied(m.group(0)) else m.group(0),
             content
         )
         
@@ -271,6 +275,16 @@ class ESP32RobotProxyView(HomeAssistantView):
             function rewriteUrl(url) {{
                 if (typeof url !== 'string') return url;
                 
+                // Предотвращаем дублирование прокси-пути
+                if (url.includes(proxyBase)) {{
+                    return url;
+                }}
+                
+                // Если это уже начинается с нашего прокси-пути
+                if (url.startsWith('{PROXY_BASE_PATH}')) {{
+                    return url;
+                }}
+                
                 // Если это абсолютный URL с IP-адресом робота
                 if (url.match(/^https?:\/\/{re.escape(ip_address)}/)) {{
                     return url.replace(/^https?:\/\/{re.escape(ip_address)}/, proxyBase);
@@ -278,7 +292,10 @@ class ESP32RobotProxyView(HomeAssistantView):
                 
                 // Если это относительный URL, начинающийся с /
                 if (url.startsWith('/')) {{
-                    return proxyBase + url;
+                    // Проверяем, не начинается ли URL уже с прокси-пути
+                    if (!url.startsWith(proxyBase) && !url.startsWith('{PROXY_BASE_PATH}')) {{
+                        return proxyBase + url;
+                    }}
                 }}
                 
                 return url;
@@ -308,7 +325,14 @@ class ESP32RobotProxyView(HomeAssistantView):
                         if (url.startsWith('ws://')) {{
                             // Заменяем ws:// на wss:// и домен на текущий
                             const path = url.replace(/^ws:\/\/[^/]+/, '');
-                            url = 'wss://' + window.location.host + proxyBase + path;
+                            
+                            // Проверяем, не начинается ли путь уже с прокси-пути
+                            if (!path.startsWith(proxyBase) && !path.startsWith('{PROXY_BASE_PATH}')) {{
+                                url = 'wss://' + window.location.host + proxyBase + path;
+                            }} else {{
+                                url = 'wss://' + window.location.host + path;
+                            }}
+                            
                             console.log("Proxying WebSocket to:", url);
                         }}
                     }}
@@ -335,12 +359,23 @@ class ESP32RobotProxyView(HomeAssistantView):
             // Добавляем обработчики для AJAX-запросов jQuery, если jQuery доступен
             if (window.jQuery) {{
                 jQuery(document).ajaxSend(function(event, jqxhr, settings) {{
-                    if (typeof settings.url === 'string' && settings.url.startsWith('/')) {{
-                        settings.url = proxyBase + settings.url;
+                    if (typeof settings.url === 'string') {{
+                        settings.url = rewriteUrl(settings.url);
                         console.log("Proxying jQuery AJAX to:", settings.url);
                     }}
                 }});
             }}
+            
+            // Исправляем все ссылки в документе
+            document.querySelectorAll('a[href], [src], form[action]').forEach(el => {{
+                if (el.tagName === 'A' && el.hasAttribute('href')) {{
+                    el.href = rewriteUrl(el.getAttribute('href'));
+                }} else if (el.hasAttribute('src')) {{
+                    el.src = rewriteUrl(el.getAttribute('src'));
+                }} else if (el.tagName === 'FORM' && el.hasAttribute('action')) {{
+                    el.action = rewriteUrl(el.getAttribute('action'));
+                }}
+            }});
             
             console.log("ESP32 Robot proxy initialized successfully");
         }})();
