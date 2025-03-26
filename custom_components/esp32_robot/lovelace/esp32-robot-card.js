@@ -243,7 +243,12 @@ class ESP32RobotCard extends LitElement {
             <button class="close-button" @click="${this._toggleIframe}">
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
-            <iframe src="${this.iframeUrl}" allow="fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
+            <iframe 
+              src="${this.iframeUrl}" 
+              allow="fullscreen" 
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+              referrerpolicy="same-origin"
+            ></iframe>
           </div>
         </div>
       ` : ''}

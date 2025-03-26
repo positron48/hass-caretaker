@@ -18,11 +18,17 @@ IFRAME_SIGNAL = f"{DOMAIN}_iframe_signal"
 async def async_setup_card(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Set up the iframe service for the ESP32 Robot."""
     ip_address = entry.data.get(CONF_IP_ADDRESS)
+    # Получаем proxy_url, если он доступен
+    proxy_url = entry.data.get("proxy_url")
     
     # Регистрируем сервис для открытия iframe
     async def open_iframe(call):
         """Open the iframe with the robot interface."""
-        url = f"http://{ip_address}/"
+        # Используем прокси-URL, если он доступен, иначе используем прямой URL
+        if proxy_url:
+            url = proxy_url
+        else:
+            url = f"http://{ip_address}/"
         hass.helpers.dispatcher.async_dispatcher_send(IFRAME_SIGNAL, url)
         
     hass.services.async_register(
