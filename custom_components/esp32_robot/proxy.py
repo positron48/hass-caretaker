@@ -174,9 +174,6 @@ class ESP32RobotProxyView(HomeAssistantView):
                                 headers=resp_headers,
                             )
                             
-                            # Увеличиваем размер буфера для потоковых данных
-                            resp_obj._payload_writer._drain_waiter = None
-                            
                             # Подготавливаем ответ
                             await resp_obj.prepare(request)
                             
