@@ -23,10 +23,14 @@ async def async_setup_entry(
     """Set up ESP32 Robot sensor based on a config entry."""
     _LOGGER.info(f"Setting up ESP32 Robot sensor for entry {entry.entry_id}")
     
-    host = entry.data.get(CONF_HOST) or entry.data.get(CONF_IP_ADDRESS) or "unknown"
-    
-    # Упрощенная версия без координатора для диагностики
-    async_add_entities([ESP32RobotSensor(host, entry.entry_id)])
+    try:
+        host = entry.data.get(CONF_HOST) or entry.data.get(CONF_IP_ADDRESS) or "unknown"
+        
+        # Упрощенная версия без координатора для диагностики
+        async_add_entities([ESP32RobotSensor(host, entry.entry_id)])
+        _LOGGER.debug(f"Added ESP32RobotSensor for host {host}")
+    except Exception as ex:
+        _LOGGER.error(f"Error setting up ESP32 Robot sensor: {ex}")
 
 class ESP32RobotSensor(SensorEntity):
     """Representation of a ESP32 Robot sensor."""
@@ -43,6 +47,8 @@ class ESP32RobotSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{host}_status"
         self._attr_name = f"ESP32 Robot Status"
         self._attr_native_value = "diagnostic"
+        
+        _LOGGER.debug(f"Initialized ESP32RobotSensor: {self._attr_unique_id}")
 
     @property
     def icon(self):
@@ -61,5 +67,5 @@ class ESP32RobotSensor(SensorEntity):
             "host": self._host,
             "entry_id": self._entry_id,
             "diagnostic_mode": True,
-            "version": "0.7.2"
+            "version": "0.7.4"
         } 

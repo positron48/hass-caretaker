@@ -9,6 +9,8 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.exceptions import ConfigEntryNotReady
 import os
 
+_LOGGER = logging.getLogger(__name__)
+
 from .const import DOMAIN, CONF_IP_ADDRESS, CONF_HOST, CONF_USERNAME, CONF_PASSWORD, PROXY_VIEW, DATA_CLIENT, DATA_ENTITIES, PROXY_URL, DIRECT_PROXY_URL, ROOT_PATH
 from .card import async_setup_card
 from .frontend import async_setup_frontend
@@ -18,7 +20,6 @@ from .proxy import async_setup_proxy, ESP32RobotDirectProxyView, ESP32RobotProxy
 try:
     from .controller.robot_client import ESP32RobotClient
 except ImportError:
-    _LOGGER = logging.getLogger(__name__)
     _LOGGER.warning("Using fallback ESP32RobotClient implementation")
     
     class ESP32RobotClient:
@@ -38,8 +39,6 @@ except ImportError:
         async def control(self, direction, speed=255, hass=None):
             """Control robot movement."""
             return {"status": "error", "message": "Using fallback implementation"}
-
-_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["sensor"]
 
