@@ -84,8 +84,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Подключаем платформу сенсора
     _LOGGER.info(f"Setting up sensor platform for ESP32 Robot")
-    # Правильный вызов с await
-    await hass.config_entries.async_forward_entry_setup(entry, "sensor")
+    # Правильный вызов с await и новым методом setups (множественное число)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
     _LOGGER.info(f"ESP32 Robot entry {entry.entry_id} basic setup completed")
     return True
@@ -94,12 +94,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Выгрузка конфигурационной записи."""
     _LOGGER.info(f"Unloading ESP32 Robot entry {entry.entry_id}")
     
-    # Выгружаем платформу сенсора
-    await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+    # Выгружаем платформы
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     
     # Простое удаление данных записи
-    if entry.entry_id in hass.data.get(DOMAIN, {}):
+    if unload_ok and entry.entry_id in hass.data.get(DOMAIN, {}):
         hass.data[DOMAIN].pop(entry.entry_id)
         _LOGGER.info(f"Removed entry data for {entry.entry_id}")
     
-    return True 
+    return unload_ok 

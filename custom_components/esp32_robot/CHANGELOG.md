@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3
+
+### Изменения
+- Исправлена invalid escape sequence '\/' в proxy.py
+- Обновлены устаревшие вызовы async_forward_entry_setup на async_forward_entry_setups
+- Исправлен метод async_unload_entry для использования async_unload_platforms
+- Улучшен JavaScript код для прокси
+
 ## 0.7.2
 
 ### Изменения

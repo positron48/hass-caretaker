@@ -258,83 +258,80 @@ class ESP32RobotProxyView(HomeAssistantView):
             content
         )
         
-        # Добавляем JavaScript для перехвата динамически созданных запросов
+        # JavaScript для перехвата и переадресации всех запросов через прокси
         intercept_js = f"""
         <script>
         (function() {{
-            console.log("ESP32 Robot proxy initializing...");
+            const proxyBase = "{proxy_base}";
+            console.log("Setting up ESP32 Robot proxy with base:", proxyBase);
             
-            // Проверяем, не запущен ли уже наш скрипт
-            if (window.ESP32_ROBOT_PROXY_INITIALIZED) return;
-            window.ESP32_ROBOT_PROXY_INITIALIZED = true;
-            
-            // Базовый URL для прокси
-            const proxyBase = '{proxy_base}';
-            console.log("Using proxy base: " + proxyBase);
-            
-            // Функция для преобразования URL
+            // Функция для переписывания URL, чтобы они проходили через прокси
             function rewriteUrl(url) {{
-                if (typeof url !== 'string') return url;
+                if (!url) return url;
                 
-                // Если это абсолютный URL с IP-адресом робота
+                // Если URL абсолютный с текущим хостом робота
                 if (url.match(/^https?:\/\/{re.escape(ip_address)}/)) {{
                     return url.replace(/^https?:\/\/{re.escape(ip_address)}/, proxyBase);
                 }}
                 
-                // Если это относительный URL, начинающийся с /
+                // Для относительных URL, начинающихся с /
                 if (url.startsWith('/')) {{
                     return proxyBase + url;
                 }}
                 
                 return url;
             }}
-            
-            // Хак для перехвата динамически созданных запросов
+
+            // Перехватываем API fetch
             const originalFetch = window.fetch;
-            window.fetch = function(url, options) {{
-                url = rewriteUrl(url);
-                console.log("Proxying fetch to:", url);
-                return originalFetch(url, options);
+            window.fetch = function(resource, init) {{
+                if (typeof resource === 'string') {{
+                    resource = rewriteUrl(resource);
+                    console.log("Proxying fetch to:", resource);
+                }}
+                return originalFetch.apply(this, arguments);
             }};
             
-            // Перехват XMLHttpRequest
+            // Перехватываем XMLHttpRequest
             const originalOpen = XMLHttpRequest.prototype.open;
-            XMLHttpRequest.prototype.open = function(method, url, ...args) {{
-                url = rewriteUrl(url);
-                console.log("Proxying XHR to:", url);
-                return originalOpen.call(this, method, url, ...args);
+            XMLHttpRequest.prototype.open = function(method, url, async, user, password) {{
+                if (typeof url === 'string') {{
+                    url = rewriteUrl(url);
+                    console.log("Proxying XHR to:", url);
+                }}
+                return originalOpen.apply(this, arguments);
             }};
             
-            // Перехват WebSocket
+            // Перехватываем WebSocket соединения
             if (window.WebSocket) {{
-                const originalWebSocket = window.WebSocket;
+                const originalWebSocket = WebSocket;
                 window.WebSocket = function(url, protocols) {{
-                    if (typeof url === 'string') {{
-                        if (url.startsWith('ws://')) {{
-                            // Заменяем ws:// на wss:// и домен на текущий
-                            const path = url.replace(/^ws:\/\/[^/]+/, '');
-                            url = 'wss://' + window.location.host + proxyBase + path;
-                            console.log("Proxying WebSocket to:", url);
-                        }}
+                    if (url.startsWith('ws://{ip_address}')) {{
+                        const path = url.replace(/^ws:\/\/[^/]+/, '');
+                        const newUrl = window.location.protocol.replace('http', 'ws') + '//' + 
+                                      window.location.host + proxyBase + path;
+                        console.log("Proxying WebSocket from", url, "to", newUrl);
+                        return new originalWebSocket(newUrl, protocols);
                     }}
                     return new originalWebSocket(url, protocols);
                 }};
-                window.WebSocket.prototype = originalWebSocket.prototype;
-                window.WebSocket.CONNECTING = originalWebSocket.CONNECTING;
-                window.WebSocket.OPEN = originalWebSocket.OPEN;
-                window.WebSocket.CLOSING = originalWebSocket.CLOSING;
-                window.WebSocket.CLOSED = originalWebSocket.CLOSED;
+                
+                // Копируем свойства оригинального конструктора
+                for (const prop in originalWebSocket) {{
+                    if (originalWebSocket.hasOwnProperty(prop)) {{
+                        window.WebSocket[prop] = originalWebSocket[prop];
+                    }}
+                }}
             }}
             
-            // Перехват EventSource для Server-Sent Events
+            // Поддержка EventSource для Server-Sent Events
             if (window.EventSource) {{
-                const originalEventSource = window.EventSource;
-                window.EventSource = function(url, options) {{
+                const originalEventSource = EventSource;
+                window.EventSource = function(url, config) {{
                     url = rewriteUrl(url);
                     console.log("Proxying EventSource to:", url);
-                    return new originalEventSource(url, options);
+                    return new originalEventSource(url, config);
                 }};
-                window.EventSource.prototype = originalEventSource.prototype;
             }}
             
             // Добавляем обработчики для AJAX-запросов jQuery, если jQuery доступен
