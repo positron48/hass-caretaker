@@ -51,6 +51,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         # Настраиваем компонент
         hass.data.setdefault(DOMAIN, {})
         
+        # Настраиваем прокси сначала
+        _LOGGER.debug("Setting up proxy server")
+        try:
+            proxy_view = ESP32RobotProxyView(hass)
+            hass.http.register_view(proxy_view)
+            hass.data[DOMAIN][PROXY_VIEW] = proxy_view
+            _LOGGER.debug("Proxy server registered")
+        except Exception as ex:
+            _LOGGER.error(f"Error registering proxy handler: {ex}")
+            # Продолжаем работу даже если не удалось зарегистрировать прокси
+        
         # Регистрируем веб-ресурсы для фронтенда
         _LOGGER.debug("Registering frontend resources")
         try:
@@ -63,8 +74,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         # Регистрируем прямой прокси (без авторизации)
         _LOGGER.debug("Registering direct proxy handler")
         try:
-            hass.http.register_view(ESP32RobotDirectProxyView(hass))
-            _LOGGER.debug("Direct proxy handler registered")
+            # Получаем основной прокси перед созданием прямого
+            if PROXY_VIEW in hass.data[DOMAIN]:
+                proxy_view = hass.data[DOMAIN][PROXY_VIEW]
+                hass.http.register_view(ESP32RobotDirectProxyView(hass, proxy_view))
+                _LOGGER.debug("Direct proxy handler registered")
+            else:
+                _LOGGER.warning("Cannot register direct proxy: main proxy view not found")
         except Exception as ex:
             _LOGGER.error(f"Error registering direct proxy handler: {ex}")
             # Продолжаем работу даже если не удалось зарегистрировать прямой прокси
