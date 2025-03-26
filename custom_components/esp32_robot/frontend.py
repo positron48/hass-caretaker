@@ -7,8 +7,9 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-LOVELACE_CARD_URL = '/esp32_robot/esp32-robot-card.js'
-EDITOR_URL = '/esp32_robot/editor.js'
+DOMAIN = "esp32_robot"
+LOVELACE_CARD_URL = f"/{DOMAIN}/esp32-robot-card.js"
+EDITOR_URL = f"/{DOMAIN}/editor.js"
 
 async def async_setup_frontend(hass: HomeAssistant) -> bool:
     """Set up the ESP32 Robot frontend."""

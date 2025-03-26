@@ -1,5 +1,7 @@
 {
   "name": "ESP32 Robot",
   "render_readme": true,
-  "iot_class": "local_polling"
+  "iot_class": "local_polling",
+  "lovelace": true,
+  "homeassistant": "2023.3.0"
 } 

@@ -2,6 +2,7 @@
 import logging
 import asyncio
 import aiohttp
+import hashlib
 from datetime import timedelta
 
 from homeassistant.components.sensor import SensorEntity
@@ -23,6 +24,9 @@ async def async_setup_entry(
     ip_address = entry.data.get(CONF_IP_ADDRESS)
     scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     
+    # Получаем proxy_url если он доступен
+    proxy_url = entry.data.get("proxy_url")
+    
     # Создаем сервис для бизнес-логики
     robot_service = RobotService(hass, ip_address)
     
@@ -30,7 +34,7 @@ async def async_setup_entry(
     coordinator = ESP32RobotCoordinator(hass, robot_service, scan_interval)
     await coordinator.async_config_entry_first_refresh()
     
-    async_add_entities([ESP32RobotSensor(coordinator, entry)])
+    async_add_entities([ESP32RobotSensor(coordinator, entry, proxy_url)])
 
 class ESP32RobotCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ESP32 Robot data."""
@@ -60,11 +64,12 @@ class ESP32RobotCoordinator(DataUpdateCoordinator):
 class ESP32RobotSensor(SensorEntity):
     """Representation of a ESP32 Robot sensor."""
 
-    def __init__(self, coordinator, entry):
+    def __init__(self, coordinator, entry, proxy_url=None):
         """Initialize the sensor."""
         self.coordinator = coordinator
         self._entry = entry
         self._ip_address = entry.data.get(CONF_IP_ADDRESS)
+        self._proxy_url = proxy_url
         self._attr_unique_id = f"{DOMAIN}_{self._ip_address}_status"
         self._attr_name = f"ESP32 Robot Status"
         self._attr_native_value = "unknown"
@@ -94,9 +99,15 @@ class ESP32RobotSensor(SensorEntity):
         """Return the state attributes."""
         attrs = {
             "ip_address": self._ip_address,
-            "iframe_url": f"http://{self._ip_address}/",
         }
         
+        # Используем прокси-URL, если он доступен, иначе используем прямой URL
+        if self._proxy_url:
+            attrs["iframe_url"] = self._proxy_url
+            attrs["direct_url"] = f"http://{self._ip_address}/"
+        else:
+            attrs["iframe_url"] = f"http://{self._ip_address}/"
+            
         # Добавляем дополнительные данные из API, если они есть
         if self.coordinator.data and self.coordinator.data.get("status") == "online":
             attrs["bt_enabled"] = self.coordinator.data.get("bt_enabled", False)

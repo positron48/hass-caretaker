@@ -69,21 +69,6 @@ class ESP32RobotCard extends LitElement {
       .action-button:hover {
         background-color: var(--dark-primary-color);
       }
-      .iframe-container {
-        height: 0;
-        overflow: hidden;
-        transition: height 0.3s ease;
-      }
-      .iframe-container.opened {
-        height: 600px;
-        margin-top: 16px;
-      }
-      iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-        border-radius: 4px;
-      }
       .iframe-overlay {
         position: fixed;
         top: 0;
@@ -137,6 +122,17 @@ class ESP32RobotCard extends LitElement {
     this.config = config;
   }
 
+  static getConfigElement() {
+    return document.createElement("esp32-robot-card-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      entity: "sensor.esp32_robot_status",
+      title: "ESP32 Robot"
+    };
+  }
+
   getCardSize() {
     return 3;
   }
@@ -158,11 +154,6 @@ class ESP32RobotCard extends LitElement {
         this.iframeUrl = "";
       }, 300);
     }
-  }
-
-  _callService(service, data = {}) {
-    const [domain, service_name] = service.split(".");
-    this.hass.callService(domain, service_name, data);
   }
 
   render() {
@@ -252,7 +243,7 @@ class ESP32RobotCard extends LitElement {
             <button class="close-button" @click="${this._toggleIframe}">
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
-            <iframe src="${this.iframeUrl}" allow="fullscreen"></iframe>
+            <iframe src="${this.iframeUrl}" allow="fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
           </div>
         </div>
       ` : ''}
@@ -262,6 +253,7 @@ class ESP32RobotCard extends LitElement {
 
 customElements.define("esp32-robot-card", ESP32RobotCard);
 
+// Для HACS и регистрации карточки
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "esp32-robot-card",
