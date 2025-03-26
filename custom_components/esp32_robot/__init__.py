@@ -12,7 +12,7 @@ import os
 from .const import DOMAIN, CONF_IP_ADDRESS, CONF_HOST, CONF_USERNAME, CONF_PASSWORD, PROXY_VIEW, DATA_CLIENT, DATA_ENTITIES, PROXY_URL, DIRECT_PROXY_URL, ROOT_PATH
 from .card import async_setup_card
 from .frontend import async_setup_frontend
-from .proxy import async_setup_proxy, ESP32RobotDirectProxyView
+from .proxy import async_setup_proxy, ESP32RobotDirectProxyView, ESP32RobotProxyView
 
 # Если есть проблемы с импортом из .controller, используем временный класс-заглушку
 try:
@@ -54,8 +54,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         # Настраиваем прокси сначала
         _LOGGER.debug("Setting up proxy server")
         try:
-            proxy_view = ESP32RobotProxyView(hass)
-            hass.http.register_view(proxy_view)
+            proxy_view = await async_setup_proxy(hass)
             hass.data[DOMAIN][PROXY_VIEW] = proxy_view
             _LOGGER.debug("Proxy server registered")
         except Exception as ex:
@@ -259,11 +258,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         robot_id = hashlib.md5(f"{host}-{entry.entry_id}".encode()).hexdigest()[:8]
         
         # Удаляем робота из прокси
-        proxy = hass.data[DOMAIN].get("proxy")
-        if proxy and robot_id in proxy.robots:
-            del proxy.robots[robot_id]
-            _LOGGER.info(f"Unregistered robot {robot_id} from proxy")
+        if PROXY_VIEW in hass.data[DOMAIN]:
+            proxy = hass.data[DOMAIN][PROXY_VIEW]
+            if robot_id in proxy.robots:
+                del proxy.robots[robot_id]
+                _LOGGER.info(f"Unregistered robot {robot_id} from proxy")
+        else:
+            _LOGGER.warning("Proxy view not found, cannot unregister robot")
             
-        hass.data[DOMAIN].pop(entry.entry_id)
+        # Удаляем данные entry
+        if entry.entry_id in hass.data[DOMAIN]:
+            hass.data[DOMAIN].pop(entry.entry_id)
     
     return unload_ok 
