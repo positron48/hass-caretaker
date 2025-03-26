@@ -141,14 +141,8 @@ class ESP32RobotProxyView(HomeAssistantView):
                             # Обновляем Location в заголовках
                             resp_headers['Location'] = f"{PROXY_BASE_PATH}/{robot_id}{path_with_query}"
                     
-                    # Проверяем, нужно ли модифицировать контент с ссылками
-                    is_text_content = True
-                    content_type = resp.headers.get('Content-Type', '')
-                    
-                    for bin_type in BINARY_CONTENT_TYPES:
-                        if bin_type in content_type:
-                            is_text_content = False
-                            break
+                    # Проверяем тип контента
+                    content_type = resp.headers.get('Content-Type', '').lower()
                     
                     # Для потокового видео, просто проксируем данные
                     if 'multipart/x-mixed-replace' in content_type:
@@ -162,19 +156,33 @@ class ESP32RobotProxyView(HomeAssistantView):
                         await resp_obj.write_eof()
                         return resp_obj
                     
+                    # Определяем, нужно ли модифицировать контент
+                    is_html_content = 'text/html' in content_type
+                    is_api_content = any(api_type in content_type for api_type in 
+                                        ['application/json', 'text/json', 'application/xml', 
+                                         'text/xml', 'application/javascript'])
+                    is_binary_content = any(bin_type in content_type for bin_type in BINARY_CONTENT_TYPES)
+                    
                     # Читаем ответ
-                    if resp.status == 200 and is_text_content:
+                    if resp.status == 200 and is_html_content:
+                        # Только для HTML контента модифицируем ссылки
                         content = await resp.text()
-                        
-                        # Заменяем ссылки, чтобы они проходили через прокси
                         content = self._rewrite_content(content, robot_id, robot_url)
-                        
+                        return web.Response(
+                            status=resp.status,
+                            headers=resp_headers,
+                            text=content
+                        )
+                    elif resp.status == 200 and is_api_content:
+                        # API контент (JSON, XML) возвращаем без модификаций
+                        content = await resp.text()
                         return web.Response(
                             status=resp.status,
                             headers=resp_headers,
                             text=content
                         )
                     else:
+                        # Бинарный или неизвестный контент возвращаем как есть
                         content = await resp.read()
                         return web.Response(
                             status=resp.status,
