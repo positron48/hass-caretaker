@@ -30,8 +30,8 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    # Включаем обязательную аутентификацию
-    requires_auth = True
+    # Возвращаем стандартную авторизацию Home Assistant
+    requires_auth = False
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
@@ -75,9 +75,6 @@ class ESP32RobotProxyView(HomeAssistantView):
         # Проверяем cookie аутентификации от Home Assistant
         if request.cookies.get("hass_auth"):
             return True
-        
-        # Для тестовых целей можно добавить basic auth для ручного ввода
-        # с использованием имени/пароля Home Assistant
         
         return False
         
@@ -208,6 +205,7 @@ class ESP32RobotProxyView(HomeAssistantView):
         )
         
         # Заменяем IP-адрес внутри текста
+        ip_address = self.robots[robot_id]
         content = re.sub(
             r'(["\'])(?:http://|https://)?(?:' + re.escape(ip_address) + r')(/[^"\']*)["\']',
             r'\1' + proxy_base + r'\2\1',
@@ -357,43 +355,9 @@ class ESP32RobotProxyView(HomeAssistantView):
             
         return content
 
-class ESP32RobotDirectProxyView(HomeAssistantView):
-    """View to provide direct access to ESP32 Robot without authentication."""
-    
-    requires_auth = False  # Для прямого доступа без авторизации
-    url = "/robot/{robot_id}/{path:.*}"
-    name = "esp32_robot_direct"
-    
-    def __init__(self, hass, proxy_view):
-        """Initialize the direct proxy view."""
-        self.hass = hass
-        self.proxy_view = proxy_view
-        
-    async def get(self, request, robot_id, path):
-        """Handle GET requests."""
-        # Перенаправляем запрос на основной прокси, но без авторизации
-        return await self.proxy_view._proxy_request(request, robot_id, path, 'GET')
-        
-    async def post(self, request, robot_id, path):
-        """Handle POST requests."""
-        return await self.proxy_view._proxy_request(request, robot_id, path, 'POST')
-        
-    async def put(self, request, robot_id, path):
-        """Handle PUT requests."""
-        return await self.proxy_view._proxy_request(request, robot_id, path, 'PUT')
-        
-    async def delete(self, request, robot_id, path):
-        """Handle DELETE requests."""
-        return await self.proxy_view._proxy_request(request, robot_id, path, 'DELETE')
-
 async def async_setup_proxy(hass: HomeAssistant):
     """Set up the proxy server for ESP32 Robot."""
     proxy_view = ESP32RobotProxyView(hass)
     hass.http.register_view(proxy_view)
-    
-    # Регистрируем также прямой доступ без авторизации
-    # Этот URL можно использовать для доступа без авторизации, например через мобильное приложение
-    direct_proxy_view = ESP32RobotDirectProxyView(hass, proxy_view)
-    hass.http.register_view(direct_proxy_view)
     
     return proxy_view 

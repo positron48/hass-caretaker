@@ -7,5 +7,5 @@
   "codeowners": ["@positronic57"],
   "requirements": [],
   "config_flow": true,
-  "version": "0.10.6"
+  "version": "0.10.8"
 } 
