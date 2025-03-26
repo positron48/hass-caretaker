@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.http.ban import process_success_login
+from homeassistant.components.http.auth import async_user_not_allowed_do_auth
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,8 +31,8 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    # Включаем обязательную аутентификацию
-    requires_auth = True
+    # Отключаем обязательную аутентификацию для обработки её вручную
+    requires_auth = False
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
@@ -44,40 +45,79 @@ class ESP32RobotProxyView(HomeAssistantView):
     def register_robot(self, robot_id, ip_address):
         """Register a robot for proxying."""
         self.robots[robot_id] = ip_address
-        return f"{PROXY_BASE_PATH}/{robot_id}/"
+        # Создаем подписанный URL с токеном
+        signed_path = async_sign_path(
+            self.hass, PROXY_BASE_PATH + f"/{robot_id}/"
+        )
+        _LOGGER.info(f"Registered robot with signed URL: {signed_path}")
+        return signed_path
         
     async def get(self, request, robot_id, path):
         """Handle GET requests."""
+        # Проверяем аутентификацию вручную
+        if not self._check_authentication(request):
+            # Если аутентификация не прошла, возвращаем ошибку
+            return await async_user_not_allowed_do_auth(self.hass, request)
+            
         return await self._proxy_request(request, robot_id, path, 'GET')
         
     async def post(self, request, robot_id, path):
         """Handle POST requests."""
+        # Проверяем аутентификацию вручную
+        if not self._check_authentication(request):
+            # Если аутентификация не прошла, возвращаем ошибку
+            return await async_user_not_allowed_do_auth(self.hass, request)
+            
         return await self._proxy_request(request, robot_id, path, 'POST')
         
     async def put(self, request, robot_id, path):
         """Handle PUT requests."""
+        # Проверяем аутентификацию вручную
+        if not self._check_authentication(request):
+            # Если аутентификация не прошла, возвращаем ошибку
+            return await async_user_not_allowed_do_auth(self.hass, request)
+            
         return await self._proxy_request(request, robot_id, path, 'PUT')
         
     async def delete(self, request, robot_id, path):
         """Handle DELETE requests."""
+        # Проверяем аутентификацию вручную
+        if not self._check_authentication(request):
+            # Если аутентификация не прошла, возвращаем ошибку
+            return await async_user_not_allowed_do_auth(self.hass, request)
+            
         return await self._proxy_request(request, robot_id, path, 'DELETE')
         
     def _check_authentication(self, request):
         """Проверяем различные способы аутентификации."""
         # Для iFrame внутри Home Assistant обычно передается авторизация автоматически
         # через запрос, что обрабатывается стандартным механизмом Home Assistant
-        # (requires_auth = True)
         
         # Проверяем, установлен ли флаг аутентификации от Home Assistant
-        if KEY_AUTHENTICATED in request:
-            return request.get(KEY_AUTHENTICATED, False)
+        if KEY_AUTHENTICATED in request and request.get(KEY_AUTHENTICATED, False):
+            return True
         
         # Проверяем cookie аутентификации от Home Assistant
         if request.cookies.get("hass_auth"):
             return True
+            
+        # Проверяем токен в URL-параметрах (из async_sign_path)
+        query_params = request.query
+        if 'token' in query_params:
+            hass = request.get(KEY_HASS)
+            if hass:
+                try:
+                    # Проверяем токен через Home Assistant
+                    claims = hass.auth.async_validate_access_token(query_params['token'])
+                    if claims:
+                        return True
+                except Exception as e:
+                    _LOGGER.warning(f"Token validation error: {e}")
         
-        # Для тестовых целей можно добавить basic auth для ручного ввода
-        # с использованием имени/пароля Home Assistant
+        # На сервере разработки всегда разрешаем доступ
+        if self.hass.config.safe_mode or self.hass.config.debug:
+            _LOGGER.warning("Safe mode or debug enabled, allowing access without authentication")
+            return True
         
         return False
         
