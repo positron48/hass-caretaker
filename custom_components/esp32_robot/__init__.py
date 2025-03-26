@@ -72,12 +72,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "host": host,
     }
     
+    # Подключаем платформу сенсора
+    _LOGGER.info(f"Setting up sensor platform for ESP32 Robot")
+    hass.async_create_task(
+        hass.config_entries.async_forward_entry_setup(entry, "sensor")
+    )
+    
     _LOGGER.info(f"ESP32 Robot entry {entry.entry_id} basic setup completed")
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Выгрузка конфигурационной записи."""
     _LOGGER.info(f"Unloading ESP32 Robot entry {entry.entry_id}")
+    
+    # Выгружаем платформу сенсора
+    await hass.config_entries.async_forward_entry_unload(entry, "sensor")
     
     # Простое удаление данных записи
     if entry.entry_id in hass.data.get(DOMAIN, {}):
