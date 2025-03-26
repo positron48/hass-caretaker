@@ -61,5 +61,5 @@ class ESP32RobotSensor(SensorEntity):
             "host": self._host,
             "entry_id": self._entry_id,
             "diagnostic_mode": True,
-            "version": "0.7.0"
+            "version": "0.7.2"
         } 

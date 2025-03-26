@@ -72,11 +72,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "host": host,
     }
     
+    # Восстанавливаем карточку для Lovelace
+    try:
+        _LOGGER.debug("Setting up frontend card")
+        await async_setup_frontend(hass)
+        await async_setup_card(hass, entry)
+        _LOGGER.debug("Card setup completed")
+    except Exception as card_error:
+        _LOGGER.error(f"Error setting up card: {card_error}")
+        # Продолжаем работу даже если не удалось настроить карточку
+    
     # Подключаем платформу сенсора
     _LOGGER.info(f"Setting up sensor platform for ESP32 Robot")
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, "sensor")
-    )
+    # Правильный вызов с await
+    await hass.config_entries.async_forward_entry_setup(entry, "sensor")
     
     _LOGGER.info(f"ESP32 Robot entry {entry.entry_id} basic setup completed")
     return True
