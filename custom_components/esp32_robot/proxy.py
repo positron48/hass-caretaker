@@ -132,6 +132,17 @@ class ESP32RobotProxyView(HomeAssistantView):
                     resp_headers = {k: v for k, v in resp.headers.items()
                                    if k.lower() not in ('transfer-encoding',)}
                     
+                    # Проверяем тип контента
+                    content_type = resp.headers.get('Content-Type', '').lower()
+                    
+                    # Проверяем, сжат ли контент
+                    content_encoding = resp.headers.get('Content-Encoding', '').lower()
+                    is_gzipped = 'gzip' in content_encoding
+                    
+                    # Всегда удаляем заголовок Content-Encoding, т.к. мы будем отдавать 
+                    # несжатый контент и предотвращаем ошибку ERR_CONTENT_DECODING_FAILED
+                    resp_headers.pop('Content-Encoding', None)
+                    
                     # Если это редирект, перенаправляем через прокси
                     if resp.status in (301, 302, 303, 307, 308) and 'Location' in resp_headers:
                         original_location = resp_headers['Location']
@@ -146,9 +157,6 @@ class ESP32RobotProxyView(HomeAssistantView):
                                 
                             # Обновляем Location в заголовках
                             resp_headers['Location'] = f"{PROXY_BASE_PATH}/{robot_id}{path_with_query}"
-                    
-                    # Проверяем тип контента
-                    content_type = resp.headers.get('Content-Type', '').lower()
                     
                     # Определяем, является ли это потоковым запросом
                     is_stream_request = (
@@ -206,21 +214,41 @@ class ESP32RobotProxyView(HomeAssistantView):
                     # Читаем ответ
                     if resp.status == 200 and is_html_content:
                         # Только для HTML контента модифицируем ссылки
-                        content = await resp.text()
-                        content = self._rewrite_content(content, robot_id, robot_url)
-                        return web.Response(
-                            status=resp.status,
-                            headers=resp_headers,
-                            text=content
-                        )
+                        try:
+                            # aiohttp автоматически декодирует gzip-контент
+                            content = await resp.text()
+                            content = self._rewrite_content(content, robot_id, robot_url)
+                            return web.Response(
+                                status=resp.status,
+                                headers=resp_headers,
+                                text=content
+                            )
+                        except UnicodeDecodeError as e:
+                            # Если возникла ошибка декодирования, логируем и возвращаем как бинарный контент
+                            _LOGGER.error(f"Unicode decode error for HTML content: {e}")
+                            content = await resp.read()
+                            return web.Response(
+                                status=resp.status,
+                                headers=resp_headers,
+                                body=content
+                            )
                     elif resp.status == 200 and is_api_content:
                         # API контент (JSON, XML) возвращаем без модификаций
-                        content = await resp.text()
-                        return web.Response(
-                            status=resp.status,
-                            headers=resp_headers,
-                            text=content
-                        )
+                        try:
+                            content = await resp.text()
+                            return web.Response(
+                                status=resp.status,
+                                headers=resp_headers,
+                                text=content
+                            )
+                        except UnicodeDecodeError as e:
+                            _LOGGER.error(f"Unicode decode error for API content: {e}")
+                            content = await resp.read()
+                            return web.Response(
+                                status=resp.status,
+                                headers=resp_headers,
+                                body=content
+                            )
                     else:
                         # Бинарный или неизвестный контент возвращаем как есть
                         content = await resp.read()
