@@ -362,8 +362,8 @@ class ESP32RobotProxyView(HomeAssistantView):
                 }}
                 
                 // Если это абсолютный URL с IP-адресом робота
-                if (url.match(/^https?:\/\/{re.escape(ip_address)}/)) {{
-                    return url.replace(/^https?:\/\/{re.escape(ip_address)}/, proxyBase);
+                if (url.match(/^https?:\\/\\/{re.escape(ip_address)}/)) {{
+                    return url.replace(/^https?:\\/\\/{re.escape(ip_address)}/, proxyBase);
                 }}
                 
                 // Если это относительный URL, начинающийся с /
@@ -400,7 +400,7 @@ class ESP32RobotProxyView(HomeAssistantView):
                     if (typeof url === 'string') {{
                         if (url.startsWith('ws://')) {{
                             // Заменяем ws:// на wss:// и домен на текущий
-                            const path = url.replace(/^ws:\/\/[^/]+/, '');
+                            const path = url.replace(/^ws:\\/\\/[^/]+/, '');
                             
                             // Проверяем, не начинается ли путь уже с прокси-пути
                             if (!path.startsWith(proxyBase) && !path.startsWith('{PROXY_BASE_PATH}')) {{
