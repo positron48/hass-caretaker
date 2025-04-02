@@ -215,52 +215,131 @@ class ESP32RobotProxyView(HomeAssistantView):
                     if resp.status == 200 and is_html_content:
                         # Только для HTML контента модифицируем ссылки
                         try:
-                            # Полностью читаем весь контент перед модификацией
-                            content = await resp.read()
+                            # Полностью читаем весь контент перед модификацией с увеличенным размером буфера
+                            chunk_size = 1024 * 1024  # 1 MB
+                            content_parts = []
+                            async for chunk in resp.content.iter_chunked(chunk_size):
+                                content_parts.append(chunk)
+                            content = b''.join(content_parts)
                             
-                            # Пробуем декодировать как текст
+                            # Получаем фактические размеры для логирования
+                            actual_size = len(content)
+                            _LOGGER.debug(f"Received HTML content, size: {actual_size} bytes")
+                            
+                            # Обнаружение кодировки из meta тегов или заголовков
+                            charset = None
+                            content_type_header = resp.headers.get('Content-Type', '')
+                            
+                            # Ищем charset в заголовках
+                            if 'charset=' in content_type_header:
+                                charset = content_type_header.split('charset=')[1].strip()
+                                
+                            # Пробуем декодировать как текст с определенной кодировкой
                             try:
-                                text_content = content.decode('utf-8')
+                                if charset:
+                                    text_content = content.decode(charset)
+                                else:
+                                    # Сначала попробуем UTF-8
+                                    text_content = content.decode('utf-8')
                             except UnicodeDecodeError:
-                                # Пробуем другие кодировки
                                 try:
+                                    # Потом латинский
                                     text_content = content.decode('latin-1')
                                 except UnicodeDecodeError:
+                                    # С заменой невалидных символов
                                     text_content = content.decode('utf-8', errors='replace')
                             
                             # Модифицируем контент
-                            text_content = self._rewrite_content(text_content, robot_id, robot_url)
+                            modified_content = self._rewrite_content(text_content, robot_id, robot_url)
+                            
+                            # Проверяем, что контент был успешно модифицирован
+                            if len(modified_content) < len(text_content) * 0.9:
+                                _LOGGER.warning(f"Modified content is significantly smaller than original ({len(modified_content)} vs {len(text_content)}), using original")
+                                modified_content = text_content
+                                
+                                # Просто добавляем наш JavaScript, без замены URL
+                                if '</body>' in modified_content:
+                                    # Базовый URL прокси для этого робота
+                                    proxy_base = f"{PROXY_BASE_PATH}/{robot_id}"
+                                    intercept_js = self._get_intercept_js(proxy_base, robot_id, ip_address)
+                                    modified_content = modified_content.replace('</body>', intercept_js + '</body>')
+                            
+                            # Убираем Content-Length если он есть, так как наш контент модифицирован
+                            resp_headers.pop('Content-Length', None)
                             
                             return web.Response(
                                 status=resp.status,
                                 headers=resp_headers,
-                                text=text_content
+                                text=modified_content
                             )
                         except Exception as e:
                             # В случае любой ошибки, возвращаем контент как есть
                             _LOGGER.error(f"Error processing HTML content: {e}")
-                            return web.Response(
-                                status=resp.status,
-                                headers=resp_headers,
-                                body=content
-                            )
-                    elif resp.status == 200 and is_api_content:
-                        # API контент (JSON, XML) возвращаем без модификаций
-                        try:
-                            # Полностью читаем весь контент
-                            content = await resp.read()
-                            
-                            # Пробуем декодировать как текст
                             try:
-                                text_content = content.decode('utf-8')
-                            except UnicodeDecodeError:
-                                # Пробуем другие кодировки или возвращаем как бинарные данные
-                                _LOGGER.error("Unicode decode error for API content")
                                 return web.Response(
                                     status=resp.status,
                                     headers=resp_headers,
                                     body=content
                                 )
+                            except:
+                                # Если даже это не сработало, попробуем без модификаций просто перенаправить
+                                _LOGGER.error(f"Critical error forwarding response, trying StreamResponse")
+                                try:
+                                    # Сбрасываем соединение и повторно читаем контент
+                                    resp_obj = web.StreamResponse(
+                                        status=resp.status,
+                                        headers=resp_headers,
+                                    )
+                                    await resp_obj.prepare(request)
+                                    
+                                    # Просто передаем данные без модификации
+                                    await resp_obj.write(content)
+                                    await resp_obj.write_eof()
+                                    return resp_obj
+                                except Exception as final_e:
+                                    _LOGGER.error(f"Final error forwarding: {final_e}")
+                                    return web.Response(status=500, text="Error processing response")
+                    elif resp.status == 200 and is_api_content:
+                        # API контент (JSON, XML) возвращаем без модификаций
+                        try:
+                            # Полностью читаем весь контент
+                            chunk_size = 1024 * 1024  # 1 MB
+                            content_parts = []
+                            async for chunk in resp.content.iter_chunked(chunk_size):
+                                content_parts.append(chunk)
+                            content = b''.join(content_parts)
+                            
+                            # Получаем фактические размеры для логирования
+                            actual_size = len(content)
+                            _LOGGER.debug(f"Received API content, size: {actual_size} bytes")
+                            
+                            # Обнаружение кодировки из заголовков
+                            charset = None
+                            content_type_header = resp.headers.get('Content-Type', '')
+                            
+                            # Ищем charset в заголовках
+                            if 'charset=' in content_type_header:
+                                charset = content_type_header.split('charset=')[1].strip()
+                            
+                            # Пробуем декодировать как текст
+                            try:
+                                if charset:
+                                    text_content = content.decode(charset)
+                                else:
+                                    # Сначала пробуем UTF-8
+                                    text_content = content.decode('utf-8')
+                            except UnicodeDecodeError:
+                                # Для API контента лучше не использовать replacement,
+                                # так как это может привести к невалидному JSON или XML
+                                _LOGGER.warning("Unicode decode error for API content, returning as binary")
+                                return web.Response(
+                                    status=resp.status,
+                                    headers=resp_headers,
+                                    body=content
+                                )
+                            
+                            # Убираем Content-Length, так как его устанавливает Response автоматически
+                            resp_headers.pop('Content-Length', None)
                             
                             return web.Response(
                                 status=resp.status,
@@ -270,22 +349,65 @@ class ESP32RobotProxyView(HomeAssistantView):
                         except Exception as e:
                             # В случае любой ошибки, возвращаем контент как есть
                             _LOGGER.error(f"Error processing API content: {e}")
-                            # Если content еще не определен, читаем его
-                            if not 'content' in locals():
-                                content = await resp.read()
+                            try:
+                                return web.Response(
+                                    status=resp.status,
+                                    headers=resp_headers,
+                                    body=content
+                                )
+                            except:
+                                # Если даже это не сработало, попробуем без модификаций просто перенаправить
+                                _LOGGER.error(f"Critical error forwarding API response, trying StreamResponse")
+                                try:
+                                    # Создаем поток для передачи данных
+                                    resp_obj = web.StreamResponse(
+                                        status=resp.status,
+                                        headers=resp_headers,
+                                    )
+                                    await resp_obj.prepare(request)
+                                    
+                                    # Просто передаем данные без модификации
+                                    await resp_obj.write(content)
+                                    await resp_obj.write_eof()
+                                    return resp_obj
+                                except Exception as final_e:
+                                    _LOGGER.error(f"Final error forwarding API: {final_e}")
+                                    return web.Response(status=500, text="Error processing API response")
+                    else:
+                        # Бинарный или неизвестный контент возвращаем как есть
+                        try:
+                            # Читаем данные по частям
+                            chunk_size = 1024 * 1024  # 1 MB
+                            content_parts = []
+                            async for chunk in resp.content.iter_chunked(chunk_size):
+                                content_parts.append(chunk)
+                            content = b''.join(content_parts)
+                            
+                            # Убираем Content-Length, так как его устанавливает Response автоматически
+                            resp_headers.pop('Content-Length', None)
+                            
                             return web.Response(
                                 status=resp.status,
                                 headers=resp_headers,
                                 body=content
                             )
-                    else:
-                        # Бинарный или неизвестный контент возвращаем как есть
-                        content = await resp.read()
-                        return web.Response(
-                            status=resp.status,
-                            headers=resp_headers,
-                            body=content
-                        )
+                        except Exception as e:
+                            _LOGGER.error(f"Error processing binary content: {e}")
+                            try:
+                                # Создаем поток для передачи данных
+                                resp_obj = web.StreamResponse(
+                                    status=resp.status,
+                                    headers=resp_headers,
+                                )
+                                await resp_obj.prepare(request)
+                                
+                                # Передаем данные
+                                await resp_obj.write(content)
+                                await resp_obj.write_eof()
+                                return resp_obj
+                            except Exception as final_e:
+                                _LOGGER.error(f"Final error forwarding binary: {final_e}")
+                                return web.Response(status=500, text="Error processing binary response")
                         
         except aiohttp.ClientError as err:
             _LOGGER.error(f"Error proxying request to {target_url}: {err}")
@@ -363,7 +485,19 @@ class ESP32RobotProxyView(HomeAssistantView):
         )
         
         # Добавляем JavaScript для перехвата динамически созданных запросов
-        intercept_js = f"""
+        intercept_js = self._get_intercept_js(proxy_base, robot_id, ip_address)
+        
+        # Добавляем наш JavaScript перед закрывающим тегом </body>
+        if '</body>' in content:
+            content = content.replace('</body>', intercept_js + '</body>')
+        else:
+            content += intercept_js
+            
+        return content
+
+    def _get_intercept_js(self, proxy_base, robot_id, ip_address):
+        """Generate JavaScript code for URL interception."""
+        return f"""
         <script>
         (function() {{
             console.log("ESP32 Robot proxy initializing...");
@@ -486,14 +620,6 @@ class ESP32RobotProxyView(HomeAssistantView):
         }})();
         </script>
         """
-        
-        # Добавляем наш JavaScript перед закрывающим тегом </body>
-        if '</body>' in content:
-            content = content.replace('</body>', intercept_js + '</body>')
-        else:
-            content += intercept_js
-            
-        return content
 
 async def async_setup_proxy(hass: HomeAssistant):
     """Set up the proxy server for ESP32 Robot."""
