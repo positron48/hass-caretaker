@@ -215,18 +215,30 @@ class ESP32RobotProxyView(HomeAssistantView):
                     if resp.status == 200 and is_html_content:
                         # Только для HTML контента модифицируем ссылки
                         try:
-                            # aiohttp автоматически декодирует gzip-контент
-                            content = await resp.text()
-                            content = self._rewrite_content(content, robot_id, robot_url)
+                            # Полностью читаем весь контент перед модификацией
+                            content = await resp.read()
+                            
+                            # Пробуем декодировать как текст
+                            try:
+                                text_content = content.decode('utf-8')
+                            except UnicodeDecodeError:
+                                # Пробуем другие кодировки
+                                try:
+                                    text_content = content.decode('latin-1')
+                                except UnicodeDecodeError:
+                                    text_content = content.decode('utf-8', errors='replace')
+                            
+                            # Модифицируем контент
+                            text_content = self._rewrite_content(text_content, robot_id, robot_url)
+                            
                             return web.Response(
                                 status=resp.status,
                                 headers=resp_headers,
-                                text=content
+                                text=text_content
                             )
-                        except UnicodeDecodeError as e:
-                            # Если возникла ошибка декодирования, логируем и возвращаем как бинарный контент
-                            _LOGGER.error(f"Unicode decode error for HTML content: {e}")
-                            content = await resp.read()
+                        except Exception as e:
+                            # В случае любой ошибки, возвращаем контент как есть
+                            _LOGGER.error(f"Error processing HTML content: {e}")
                             return web.Response(
                                 status=resp.status,
                                 headers=resp_headers,
@@ -235,15 +247,32 @@ class ESP32RobotProxyView(HomeAssistantView):
                     elif resp.status == 200 and is_api_content:
                         # API контент (JSON, XML) возвращаем без модификаций
                         try:
-                            content = await resp.text()
+                            # Полностью читаем весь контент
+                            content = await resp.read()
+                            
+                            # Пробуем декодировать как текст
+                            try:
+                                text_content = content.decode('utf-8')
+                            except UnicodeDecodeError:
+                                # Пробуем другие кодировки или возвращаем как бинарные данные
+                                _LOGGER.error("Unicode decode error for API content")
+                                return web.Response(
+                                    status=resp.status,
+                                    headers=resp_headers,
+                                    body=content
+                                )
+                            
                             return web.Response(
                                 status=resp.status,
                                 headers=resp_headers,
-                                text=content
+                                text=text_content
                             )
-                        except UnicodeDecodeError as e:
-                            _LOGGER.error(f"Unicode decode error for API content: {e}")
-                            content = await resp.read()
+                        except Exception as e:
+                            # В случае любой ошибки, возвращаем контент как есть
+                            _LOGGER.error(f"Error processing API content: {e}")
+                            # Если content еще не определен, читаем его
+                            if not 'content' in locals():
+                                content = await resp.read()
                             return web.Response(
                                 status=resp.status,
                                 headers=resp_headers,
