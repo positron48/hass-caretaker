@@ -328,7 +328,7 @@ class ESP32RobotProxyView(HomeAssistantView):
         
         # Заменяем любые оставшиеся прямые ссылки к API эндпоинтам
         content = re.sub(
-            r'(["\'])(\/(?:api|bt|stream|control|status)[^"\']*)["\']',
+            r'(["\'])(/((?:api|bt|stream|control|status)[^"\']*))["\']{1}',
             lambda m: f'{m.group(1)}{proxy_base}{m.group(2)}{m.group(1)}' if not m.group(2).startswith(proxy_base) and not is_already_proxied(m.group(0)) else m.group(0),
             content
         )
