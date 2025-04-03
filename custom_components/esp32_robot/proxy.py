@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.http.ban import process_success_login
+from homeassistant.auth.util import async_get_user_from_request
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ BINARY_CONTENT_TYPES = [
 class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
-    # Возвращаем стандартную авторизацию Home Assistant
+    # Отключаем стандартную авторизацию Home Assistant, так как используем свою
     requires_auth = False
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
@@ -62,11 +63,10 @@ class ESP32RobotProxyView(HomeAssistantView):
         """Handle DELETE requests."""
         return await self._proxy_request(request, robot_id, path, 'DELETE')
         
-    def _check_authentication(self, request):
-        """Проверяем различные способы аутентификации."""
+    async def _check_authentication(self, request):
+        """Проверяем различные способы аутентификации, включая токен."""
         # Для iFrame внутри Home Assistant обычно передается авторизация автоматически
         # через запрос, что обрабатывается стандартным механизмом Home Assistant
-        # (requires_auth = True)
         
         # Проверяем, установлен ли флаг аутентификации от Home Assistant
         if KEY_AUTHENTICATED in request:
@@ -75,11 +75,38 @@ class ESP32RobotProxyView(HomeAssistantView):
         # Проверяем cookie аутентификации от Home Assistant
         if request.cookies.get("hass_auth"):
             return True
+            
+        # Проверяем токен доступа в параметрах запроса
+        token = request.query.get("token")
+        if token:
+            try:
+                # Получаем hass из request
+                hass = request.get(KEY_HASS)
+                if not hass:
+                    _LOGGER.error("Home Assistant instance not available in request")
+                    return False
+                
+                # Проверяем токен через систему аутентификации Home Assistant
+                user = await async_get_user_from_request(request)
+                if user is not None:
+                    _LOGGER.debug(f"User authenticated with token: {user.name}")
+                    # Помечаем запрос как аутентифицированный
+                    request[KEY_AUTHENTICATED] = True
+                    return True
+                else:
+                    _LOGGER.warning("Invalid token provided in request")
+            except Exception as ex:
+                _LOGGER.error(f"Token authentication error: {ex}")
         
         return False
         
     async def _proxy_request(self, request, robot_id, path, method):
         """Proxy a request to the robot."""
+        # Проверяем аутентификацию пользователя
+        is_authenticated = await self._check_authentication(request)
+        if not is_authenticated:
+            return web.Response(status=401, text="Unauthorized. Please provide a valid token.")
+            
         if robot_id not in self.robots:
             return web.Response(status=404, text=f"Robot {robot_id} not found")
             
@@ -110,8 +137,11 @@ class ESP32RobotProxyView(HomeAssistantView):
             # Получаем тело запроса, если оно есть
             data = await request.read() if request.content_length else None
             
-            # Получаем параметры запроса
-            params = request.query
+            # Получаем параметры запроса и удаляем токен из запроса к роботу
+            params = dict(request.query)
+            # Удаляем токен из запроса к роботу для безопасности
+            if 'token' in params:
+                del params['token']
             
             # Копируем заголовки запроса
             headers = {k: v for k, v in request.headers.items() 

@@ -145,7 +145,20 @@ class ESP32RobotCard extends LitElement {
       return;
     }
     
-    this.iframeUrl = stateObj.attributes.iframe_url;
+    // Получаем базовый URL из атрибутов entity
+    const baseUrl = stateObj.attributes.iframe_url;
+    
+    // Получаем токен доступа из hass
+    const token = this.hass.auth.data.access_token;
+    
+    if (!baseUrl || !token) {
+      return;
+    }
+    
+    // Добавляем токен к URL
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    this.iframeUrl = `${baseUrl}${separator}token=${token}`;
+    
     this.iframeOpened = !this.iframeOpened;
     
     // Если iframe открыт и мы закрываем его - очищаем URL
