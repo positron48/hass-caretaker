@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant.components.http import HomeAssistantView, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
+from homeassistant.auth.providers import AuthProvider
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,20 +60,21 @@ class ESP32RobotProxyView(HomeAssistantView):
         """Handle DELETE requests."""
         return await self._proxy_request(request, robot_id, path, 'DELETE')
         
-    async def _check_authentication(self, request):
+    async def _check_auth(self, request):
         token = request.query.get("token")
         if not token:
             return False
 
-        try:
-            user = request.get("hass_user")
-            if user:
-                _LOGGER.debug(f"User authenticated via token: {user.name}")
-                request["hass_user"] = user  # можно передать дальше, если нужно
-                request["auth_token"] = token
-                return True
-        except Exception as e:
-            _LOGGER.warning(f"Token validation failed: {e}")
+        # Это НЕофициальный способ (можно сломаться в будущих версиях)
+        for prov in self.hass.auth.auth_providers:
+            if hasattr(prov, "async_validate_access_token"):
+                try:
+                    user = await prov.async_validate_access_token(token)
+                    if user:
+                        request["hass_user"] = user
+                        return True
+                except Exception:
+                    pass
 
         return False
         
