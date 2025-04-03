@@ -7,11 +7,8 @@ from urllib.parse import urljoin, urlparse
 import re
 import voluptuous as vol
 
-from homeassistant.components.http import HomeAssistantView, KEY_HASS, KEY_AUTHENTICATED
+from homeassistant.components.http import HomeAssistantView, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.components.http.auth import async_sign_path, async_get_user_from_request
-from homeassistant.components.http.ban import process_success_login
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,38 +61,14 @@ class ESP32RobotProxyView(HomeAssistantView):
         
     async def _check_authentication(self, request):
         """Проверяем различные способы аутентификации, включая токен."""
-        # Для iFrame внутри Home Assistant обычно передается авторизация автоматически
-        # через запрос, что обрабатывается стандартным механизмом Home Assistant
-        
-        # Проверяем, установлен ли флаг аутентификации от Home Assistant
-        if KEY_AUTHENTICATED in request:
-            return request.get(KEY_AUTHENTICATED, False)
-        
-        # Проверяем cookie аутентификации от Home Assistant
-        if request.cookies.get("hass_auth"):
+
+        # Проверяем токен через систему аутентификации Home Assistant
+        user = request.get("hass_user")
+        if user is not None:
+            _LOGGER.debug(f"User authenticated with token: {user.name}")
+            # Помечаем запрос как аутентифицированный
+            request[KEY_AUTHENTICATED] = True
             return True
-            
-        # Проверяем токен доступа в параметрах запроса
-        token = request.query.get("token")
-        if token:
-            try:
-                # Получаем hass из request
-                hass = request.get(KEY_HASS)
-                if not hass:
-                    _LOGGER.error("Home Assistant instance not available in request")
-                    return False
-                
-                # Проверяем токен через систему аутентификации Home Assistant
-                user = await async_get_user_from_request(request)
-                if user is not None:
-                    _LOGGER.debug(f"User authenticated with token: {user.name}")
-                    # Помечаем запрос как аутентифицированный
-                    request[KEY_AUTHENTICATED] = True
-                    return True
-                else:
-                    _LOGGER.warning("Invalid token provided in request")
-            except Exception as ex:
-                _LOGGER.error(f"Token authentication error: {ex}")
         
         return False
         
