@@ -9,7 +9,6 @@ import voluptuous as vol
 
 from homeassistant.components.http import HomeAssistantView, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
-from homeassistant.components.http.auth import _async_validate_api_token
 
 _LOGGER = logging.getLogger(__name__)
 
