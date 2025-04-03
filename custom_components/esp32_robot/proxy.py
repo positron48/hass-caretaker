@@ -29,7 +29,7 @@ class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
     # Отключаем стандартную авторизацию Home Assistant, так как используем свою
-    requires_auth = False
+    requires_auth = True
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
@@ -66,7 +66,7 @@ class ESP32RobotProxyView(HomeAssistantView):
             return False
 
         try:
-            user = await _async_validate_api_token(self.hass, token)
+            user = request.get("hass_user")
             if user:
                 _LOGGER.debug(f"User authenticated via token: {user.name}")
                 request["hass_user"] = user  # можно передать дальше, если нужно
