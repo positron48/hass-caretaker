@@ -5,11 +5,9 @@ from aiohttp import web
 import asyncio
 from urllib.parse import urljoin, urlparse
 import re
-import voluptuous as vol
 
 from homeassistant.components.http import HomeAssistantView, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
-from homeassistant.auth.providers import AuthProvider
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +27,7 @@ class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
     # Отключаем стандартную авторизацию Home Assistant, так как используем свою
-    requires_auth = True
+    requires_auth = False
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
@@ -63,18 +61,14 @@ class ESP32RobotProxyView(HomeAssistantView):
     async def _check_auth(self, request):
         token = request.query.get("token")
         if not token:
-            return False
+            return None
 
-        # Это НЕофициальный способ (можно сломаться в будущих версиях)
-        for prov in self.hass.auth.auth_providers:
-            if hasattr(prov, "async_validate_access_token"):
-                try:
-                    user = await prov.async_validate_access_token(token)
-                    if user:
-                        request["hass_user"] = user
-                        return True
-                except Exception:
-                    pass
+        try:
+            # Это работает на всех поддерживаемых версиях Home Assistant
+            user = await self.hass.auth.async_get_access_token_user(token)
+            return user
+        except Exception:
+            return None
 
         return False
         
