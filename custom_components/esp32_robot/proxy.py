@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.http.ban import process_success_login
-from homeassistant.auth.util import async_get_user_from_request
+from homeassistant.components.http.auth import async_get_user_from_request
 
 _LOGGER = logging.getLogger(__name__)
 
