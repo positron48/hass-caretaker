@@ -9,7 +9,7 @@ import voluptuous as vol
 
 from homeassistant.components.http import HomeAssistantView, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
-from homeassistant.auth.jwt_wrapper import async_validate_access_token
+from homeassistant.components.http.auth import _async_validate_api_token
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class ESP32RobotProxyView(HomeAssistantView):
             return False
 
         try:
-            user = await async_validate_access_token(self.hass, token)
+            user = await _async_validate_api_token(self.hass, token)
             if user:
                 _LOGGER.debug(f"User authenticated via token: {user.name}")
                 request["hass_user"] = user  # можно передать дальше, если нужно
