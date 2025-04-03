@@ -4,6 +4,7 @@ import os
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.core import HomeAssistant
+from homeassistant.components.http.static import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,16 +19,18 @@ async def async_setup_frontend(hass: HomeAssistant) -> bool:
     add_extra_js_url(hass, LOVELACE_CARD_URL)
     add_extra_js_url(hass, EDITOR_URL)
     
-    # Регистрируем конечные точки для статических файлов
-    hass.http.register_static_path(
-        LOVELACE_CARD_URL,
-        os.path.join(os.path.dirname(__file__), "lovelace/esp32-robot-card.js"),
-        True
-    )
-    hass.http.register_static_path(
-        EDITOR_URL,
-        os.path.join(os.path.dirname(__file__), "lovelace/editor.js"),
-        True
-    )
+    # Регистрируем конечные точки для статических файлов используя async версию
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            LOVELACE_CARD_URL,
+            os.path.join(os.path.dirname(__file__), "lovelace/esp32-robot-card.js"),
+            True
+        ),
+        StaticPathConfig(
+            EDITOR_URL,
+            os.path.join(os.path.dirname(__file__), "lovelace/editor.js"),
+            True
+        )
+    ])
     
     return True 
