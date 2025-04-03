@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant.components.http import HomeAssistantView, KEY_AUTHENTICATED
 from homeassistant.core import HomeAssistant
+from homeassistant.auth.jwt_wrapper import async_validate_access_token
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class ESP32RobotProxyView(HomeAssistantView):
     """View to proxy requests to ESP32 Robot."""
 
     # Отключаем стандартную авторизацию Home Assistant, так как используем свою
-    requires_auth = True
+    requires_auth = False
     cors_allowed = True  # Разрешаем CORS для работы через внешние приложения
     url = PROXY_BASE_PATH + "/{robot_id}/{path:.*}"
     name = "api:esp32_robot_proxy"
@@ -60,16 +61,20 @@ class ESP32RobotProxyView(HomeAssistantView):
         return await self._proxy_request(request, robot_id, path, 'DELETE')
         
     async def _check_authentication(self, request):
-        """Проверяем различные способы аутентификации, включая токен."""
+        token = request.query.get("token")
+        if not token:
+            return False
 
-        # Проверяем токен через систему аутентификации Home Assistant
-        user = request.get("hass_user")
-        if user is not None:
-            _LOGGER.debug(f"User authenticated with token: {user.name}")
-            # Помечаем запрос как аутентифицированный
-            request[KEY_AUTHENTICATED] = True
-            return True
-        
+        try:
+            user = await async_validate_access_token(self.hass, token)
+            if user:
+                _LOGGER.debug(f"User authenticated via token: {user.name}")
+                request["hass_user"] = user  # можно передать дальше, если нужно
+                request["auth_token"] = token
+                return True
+        except Exception as e:
+            _LOGGER.warning(f"Token validation failed: {e}")
+
         return False
         
     async def _proxy_request(self, request, robot_id, path, method):
