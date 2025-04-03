@@ -1,4 +1,4 @@
-"""Proxy server for ESP32 Robot interface."""
+"""Proxy server for ESP32 Robot interface. """
 import logging
 import aiohttp
 from aiohttp import web
