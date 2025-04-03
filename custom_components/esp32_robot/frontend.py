@@ -19,17 +19,18 @@ async def async_setup_frontend(hass: HomeAssistant) -> bool:
     add_extra_js_url(hass, EDITOR_URL)
     
     # Регистрируем конечные точки для статических файлов используя async версию
-    # В текущей версии Home Assistant нет StaticPathConfig, используем другой подход
-    await hass.http.async_register_static_path(
-        LOVELACE_CARD_URL,
-        os.path.join(os.path.dirname(__file__), "lovelace/esp32-robot-card.js"),
-        True
-    )
-    
-    await hass.http.async_register_static_path(
-        EDITOR_URL,
-        os.path.join(os.path.dirname(__file__), "lovelace/editor.js"),
-        True
-    )
+    # Метод принимает список конфигураций путей
+    await hass.http.async_register_static_paths([
+        {
+            "url": LOVELACE_CARD_URL,
+            "path": os.path.join(os.path.dirname(__file__), "lovelace/esp32-robot-card.js"),
+            "cache_headers": True,
+        },
+        {
+            "url": EDITOR_URL,
+            "path": os.path.join(os.path.dirname(__file__), "lovelace/editor.js"),
+            "cache_headers": True,
+        }
+    ])
     
     return True 
