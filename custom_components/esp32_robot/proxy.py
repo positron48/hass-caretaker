@@ -58,7 +58,7 @@ class ESP32RobotProxyView(HomeAssistantView):
         """Handle DELETE requests."""
         return await self._proxy_request(request, robot_id, path, 'DELETE')
         
-    async def _check_auth(self, request):
+    async def _check_authentication(self, request):
         token = request.query.get("token")
         if not token:
             return None
