@@ -2,8 +2,8 @@
 import logging
 import asyncio
 import aiohttp
-import hashlib
 from datetime import timedelta
+import json
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -13,7 +13,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, CONF_IP_ADDRESS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-from .service.robot_service import RobotService
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,24 +23,22 @@ async def async_setup_entry(
     ip_address = entry.data.get(CONF_IP_ADDRESS)
     scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     
-    # Получаем proxy_url если он доступен
-    proxy_url = entry.data.get("proxy_url")
-    
-    # Создаем сервис для бизнес-логики
-    robot_service = RobotService(hass, ip_address)
+    # Создаем сервис для проверки статуса
+    session = async_get_clientsession(hass)
     
     # Создаем координатор для обновления данных
-    coordinator = ESP32RobotCoordinator(hass, robot_service, scan_interval)
+    coordinator = ESP32RobotCoordinator(hass, session, ip_address, scan_interval)
     await coordinator.async_config_entry_first_refresh()
     
-    async_add_entities([ESP32RobotSensor(coordinator, entry, proxy_url)])
+    async_add_entities([ESP32RobotSensor(coordinator, entry)])
 
 class ESP32RobotCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ESP32 Robot data."""
 
-    def __init__(self, hass, robot_service, scan_interval):
+    def __init__(self, hass, session, ip_address, scan_interval):
         """Initialize."""
-        self.robot_service = robot_service
+        self.session = session
+        self.ip_address = ip_address
         
         update_interval = timedelta(seconds=scan_interval)
         
@@ -55,21 +52,45 @@ class ESP32RobotCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from ESP32 Robot."""
         try:
-            return await self.robot_service.check_status()
+            # Проверяем статус робота по эндпоинту /status
+            status_url = f"http://{self.ip_address}/status"
+            
+            async with self.session.get(status_url, timeout=5) as response:
+                if response.status == 200:
+                    try:
+                        data = await response.json()
+                        return {
+                            "status": "online",
+                            "data": data
+                        }
+                    except (json.JSONDecodeError, aiohttp.ContentTypeError):
+                        # Если получен неверный JSON, считаем робота оффлайн
+                        return {
+                            "status": "offline",
+                            "error": "Invalid JSON response"
+                        }
+                else:
+                    return {
+                        "status": "offline",
+                        "error": f"Status code: {response.status}"
+                    }
+                    
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            return {
+                "status": "offline",
+                "error": str(err)
+            }
         except Exception as err:
             raise UpdateFailed(f"Unknown error: {err}")
 
 class ESP32RobotSensor(SensorEntity):
     """Representation of a ESP32 Robot sensor."""
 
-    def __init__(self, coordinator, entry, proxy_url=None):
+    def __init__(self, coordinator, entry):
         """Initialize the sensor."""
         self.coordinator = coordinator
         self._entry = entry
         self._ip_address = entry.data.get(CONF_IP_ADDRESS)
-        self._proxy_url = proxy_url
         self._attr_unique_id = f"{DOMAIN}_{self._ip_address}_status"
         self._attr_name = f"ESP32 Robot Status"
         self._attr_native_value = "unknown"
@@ -101,18 +122,18 @@ class ESP32RobotSensor(SensorEntity):
             "ip_address": self._ip_address,
         }
         
-        # Используем прокси-URL, если он доступен, иначе используем прямой URL
-        if self._proxy_url:
-            attrs["iframe_url"] = self._proxy_url
-            attrs["direct_url"] = f"http://{self._ip_address}/"
-        else:
-            attrs["iframe_url"] = f"http://{self._ip_address}/"
-            
+        # Добавляем прямой URL к роботу
+        attrs["direct_url"] = f"http://{self._ip_address}/"
+        
         # Добавляем дополнительные данные из API, если они есть
         if self.coordinator.data and self.coordinator.data.get("status") == "online":
-            attrs["bt_enabled"] = self.coordinator.data.get("bt_enabled", False)
-            attrs["bt_connected"] = self.coordinator.data.get("bt_connected", False)
-            attrs["bt_status"] = self.coordinator.data.get("bt_status", "Неизвестно")
+            if "data" in self.coordinator.data and isinstance(self.coordinator.data["data"], dict):
+                # Добавляем данные из статуса, например fps и streaming
+                robot_data = self.coordinator.data["data"]
+                if "fps" in robot_data:
+                    attrs["fps"] = robot_data["fps"]
+                if "streaming" in robot_data:
+                    attrs["streaming"] = robot_data["streaming"]
             
         if self.coordinator.data and "error" in self.coordinator.data:
             attrs["last_error"] = self.coordinator.data["error"]

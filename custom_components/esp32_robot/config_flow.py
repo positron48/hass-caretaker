@@ -4,7 +4,9 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 import homeassistant.helpers.config_validation as cv
 
-from .const import DOMAIN, DEFAULT_NAME, CONF_IP_ADDRESS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+from .const import DOMAIN, CONF_IP_ADDRESS, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+
+DEFAULT_NAME = "ESP32 Robot"
 
 class ESP32RobotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for ESP32 Robot."""
@@ -15,7 +17,7 @@ class ESP32RobotConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         
         if user_input is not None:
-            # Можно добавить проверку доступности IP
+            # Создаем entry с настройками
             return self.async_create_entry(
                 title=user_input.get(CONF_NAME, DEFAULT_NAME),
                 data=user_input,

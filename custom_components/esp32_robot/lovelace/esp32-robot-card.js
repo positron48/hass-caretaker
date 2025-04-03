@@ -4,16 +4,12 @@ class ESP32RobotCard extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
-      config: { type: Object },
-      iframeOpened: { type: Boolean },
-      iframeUrl: { type: String },
+      config: { type: Object }
     };
   }
 
   constructor() {
     super();
-    this.iframeOpened = false;
-    this.iframeUrl = "";
   }
 
   static get styles() {
@@ -55,63 +51,6 @@ class ESP32RobotCard extends LitElement {
       .status-value.offline {
         color: var(--error-color, #F44336);
       }
-      .action-button {
-        background-color: var(--primary-color);
-        color: var(--text-primary-color);
-        border: none;
-        border-radius: 4px;
-        padding: 8px 16px;
-        font-size: 14px;
-        cursor: pointer;
-        width: 100%;
-        transition: background-color 0.3s;
-      }
-      .action-button:hover {
-        background-color: var(--dark-primary-color);
-      }
-      .iframe-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
-        z-index: 999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-      .iframe-modal {
-        width: 90vw;
-        height: 90vh;
-        max-width: 1200px;
-        background-color: var(--card-background-color);
-        border-radius: 8px;
-        overflow: hidden;
-        position: relative;
-      }
-      .iframe-modal iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-      }
-      .close-button {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        background-color: var(--primary-color);
-        color: var(--text-primary-color);
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 1;
-      }
     `;
   }
 
@@ -135,38 +74,6 @@ class ESP32RobotCard extends LitElement {
 
   getCardSize() {
     return 3;
-  }
-
-  _toggleIframe() {
-    const entityId = this.config.entity;
-    const stateObj = this.hass.states[entityId];
-    
-    if (!stateObj) {
-      return;
-    }
-    
-    // Получаем базовый URL из атрибутов entity
-    const baseUrl = stateObj.attributes.iframe_url;
-    
-    // Получаем токен доступа из hass
-    const token = this.hass.auth.data.access_token;
-    
-    if (!baseUrl || !token) {
-      return;
-    }
-    
-    // Добавляем токен к URL
-    const separator = baseUrl.includes("?") ? "&" : "?";
-    this.iframeUrl = `${baseUrl}${separator}token=${token}`;
-    
-    this.iframeOpened = !this.iframeOpened;
-    
-    // Если iframe открыт и мы закрываем его - очищаем URL
-    if (!this.iframeOpened) {
-      setTimeout(() => {
-        this.iframeUrl = "";
-      }, 300);
-    }
   }
 
   render() {
@@ -193,10 +100,11 @@ class ESP32RobotCard extends LitElement {
     }
 
     const status = stateObj.state;
-    const btEnabled = stateObj.attributes.bt_enabled || false;
-    const btConnected = stateObj.attributes.bt_connected || false;
-    const btStatus = stateObj.attributes.bt_status || "Неизвестно";
     const ipAddress = stateObj.attributes.ip_address || "";
+    const fps = stateObj.attributes.fps || 0;
+    const streaming = stateObj.attributes.streaming || false;
+    const directUrl = stateObj.attributes.direct_url || "";
+    const lastError = stateObj.attributes.last_error || "";
     
     return html`
       <ha-card>
@@ -217,54 +125,32 @@ class ESP32RobotCard extends LitElement {
             
             ${status === 'online' ? html`
               <div class="status-row">
-                <span class="status-label">Bluetooth:</span>
-                <span class="status-value">${btEnabled ? 'активирован' : 'не активирован'}</span>
-              </div>
-              
-              ${btEnabled ? html`
-                <div class="status-row">
-                  <span class="status-label">Подключение:</span>
-                  <span class="status-value">${btConnected ? 'подключен' : 'не подключен'}</span>
-                </div>
-                
-                <div class="status-row">
-                  <span class="status-label">Статус BT:</span>
-                  <span class="status-value">${btStatus}</span>
-                </div>
-              ` : ''}
-              
-              <div class="status-row">
                 <span class="status-label">IP адрес:</span>
                 <span class="status-value">${ipAddress}</span>
               </div>
+              
+              <div class="status-row">
+                <span class="status-label">Стриминг:</span>
+                <span class="status-value">${streaming ? 'активен' : 'не активен'}</span>
+              </div>
+              
+              ${streaming ? html`
+                <div class="status-row">
+                  <span class="status-label">FPS:</span>
+                  <span class="status-value">${fps}</span>
+                </div>
+              ` : ''}
+            ` : ''}
+            
+            ${lastError ? html`
+              <div class="status-row">
+                <span class="status-label">Ошибка:</span>
+                <span class="status-value" style="color: var(--error-color, #F44336)">${lastError}</span>
+              </div>
             ` : ''}
           </div>
-          
-          <button 
-            class="action-button" 
-            @click="${this._toggleIframe}"
-            ?disabled="${status !== 'online'}"
-          >
-            ${status === 'online' ? (this.iframeOpened ? 'Закрыть управление' : 'Открыть управление') : 'Робот недоступен'}
-          </button>
         </div>
       </ha-card>
-      
-      ${this.iframeOpened && this.iframeUrl ? html`
-        <div class="iframe-overlay" @click="${(e) => e.target === e.currentTarget && this._toggleIframe()}">
-          <div class="iframe-modal">
-            <button class="close-button" @click="${this._toggleIframe}">
-              <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-            <iframe 
-              src="${this.iframeUrl}" 
-              allow="fullscreen" 
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-              referrerpolicy="same-origin"
-            ></iframe>
-          </div>
-        </div>
-      ` : ''}
     `;
   }
 }
@@ -276,5 +162,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "esp32-robot-card",
   name: "ESP32 Robot Card",
-  description: "A card for controlling the ESP32 Robot",
+  description: "A card for displaying the ESP32 Robot status",
 }); 

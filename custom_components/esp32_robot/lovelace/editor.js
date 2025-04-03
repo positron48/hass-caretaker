@@ -21,9 +21,10 @@ class ESP32RobotCardEditor extends LitElement {
     if (!this.hass) return;
     
     this._entities = Object.keys(this.hass.states)
-      .filter(entityId => entityId.startsWith('sensor.') && 
+      .filter(entityId => entityId.startsWith('sensor.esp32_robot') || 
+             (entityId.startsWith('sensor.') && 
               this.hass.states[entityId].attributes && 
-              this.hass.states[entityId].attributes.iframe_url)
+              this.hass.states[entityId].attributes.direct_url))
       .map(entityId => ({
         id: entityId,
         name: this.hass.states[entityId].attributes.friendly_name || entityId
