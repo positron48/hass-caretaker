@@ -460,40 +460,6 @@ class ESP32RobotCard extends LitElement {
     this._isStreaming = false;
     let signedUrlRefreshTimer = null;
     
-    // Make sure the WebSocket connection is ready
-    _ensureConnectionReady = () => {
-      return new Promise((resolve, reject) => {
-        if (!this._hass || !this._hass.connection) {
-          reject(new Error("Home Assistant WebSocket connection not available"));
-          return;
-        }
-        
-        // Check if the connection is ready
-        if (this._hass.connection.haConnection && this._hass.connection.haConnection.connected) {
-          resolve();
-          return;
-        }
-        
-        console.log("Waiting for WebSocket connection to be ready...");
-        
-        // Set up a listener for when the connection is ready
-        const readyHandler = () => {
-          console.log("WebSocket connection is now ready");
-          this._hass.connection.removeEventListener("ready", readyHandler);
-          resolve();
-        };
-        
-        // Listen for the ready event
-        this._hass.connection.addEventListener("ready", readyHandler);
-        
-        // Set a timeout in case connection never becomes ready
-        setTimeout(() => {
-          this._hass.connection.removeEventListener("ready", readyHandler);
-          reject(new Error("Timeout waiting for WebSocket connection to be ready"));
-        }, 10000);
-      });
-    }
-    
     // Function to start streaming
     const startStream = async () => {
       this._isStreaming = true;
@@ -672,6 +638,40 @@ class ESP32RobotCard extends LitElement {
         throw error;
       }
     };
+  }
+  
+  // Make sure the WebSocket connection is ready
+  _ensureConnectionReady() {
+    return new Promise((resolve, reject) => {
+      if (!this._hass || !this._hass.connection) {
+        reject(new Error("Home Assistant WebSocket connection not available"));
+        return;
+      }
+      
+      // Check if the connection is ready
+      if (this._hass.connection.haConnection && this._hass.connection.haConnection.connected) {
+        resolve();
+        return;
+      }
+      
+      console.log("Waiting for WebSocket connection to be ready...");
+      
+      // Set up a listener for when the connection is ready
+      const readyHandler = () => {
+        console.log("WebSocket connection is now ready");
+        this._hass.connection.removeEventListener("ready", readyHandler);
+        resolve();
+      };
+      
+      // Listen for the ready event
+      this._hass.connection.addEventListener("ready", readyHandler);
+      
+      // Set a timeout in case connection never becomes ready
+      setTimeout(() => {
+        this._hass.connection.removeEventListener("ready", readyHandler);
+        reject(new Error("Timeout waiting for WebSocket connection to be ready"));
+      }, 10000);
+    });
   }
   
   _startStatusPolling(entityId, statusLeft, statusRight) {
