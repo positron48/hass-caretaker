@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-export class ESP32RobotCard extends LitElement {
+class ESP32RobotCard extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
@@ -10,7 +10,6 @@ export class ESP32RobotCard extends LitElement {
 
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
     this._config = {};
   }
 
@@ -53,13 +52,38 @@ export class ESP32RobotCard extends LitElement {
       .status-value.offline {
         color: var(--error-color, #F44336);
       }
+      .card-content {
+        padding: 16px;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .status-icon {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+      .attributes {
+        margin-top: 16px;
+      }
+      .attribute {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 4px;
+      }
+      .control-btn {
+        --mdc-theme-primary: var(--primary-color);
+        margin-top: 16px;
+        width: 100%;
+      }
+      .error {
+        color: var(--error-color);
+        margin-top: 8px;
+      }
     `;
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-    this._entity = this._config.entity ? hass.states[this._config.entity] : null;
-    this._render();
   }
 
   setConfig(config) {
@@ -67,6 +91,12 @@ export class ESP32RobotCard extends LitElement {
       throw new Error('You need to define an entity');
     }
     this._config = config;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._entity = this._config.entity ? hass.states[this._config.entity] : null;
+    this.requestUpdate();
   }
 
   static getConfigElement() {
@@ -84,16 +114,15 @@ export class ESP32RobotCard extends LitElement {
     return 3;
   }
 
-  _render() {
+  render() {
     if (!this._entity) {
-      this.shadowRoot.innerHTML = `
+      return html`
         <ha-card header="ESP32 Robot">
           <div class="card-content">
             <div>Entity not found: ${this._config.entity}</div>
           </div>
         </ha-card>
       `;
-      return;
     }
 
     const isOnline = this._entity.state === 'online';
@@ -102,48 +131,12 @@ export class ESP32RobotCard extends LitElement {
     const ipAddress = this._entity.attributes.ip_address || '';
     const fps = this._entity.attributes.fps !== undefined ? this._entity.attributes.fps : '';
     const streaming = this._entity.attributes.streaming !== undefined ? this._entity.attributes.streaming : '';
-    const entityId = this._entity.entity_id.split(".")[1];
 
-    this.shadowRoot.innerHTML = `
+    return html`
       <ha-card header="${this._config.title || 'ESP32 Robot'}">
-        <style>
-          .card-content {
-            padding: 16px;
-          }
-          .status {
-            display: flex;
-            align-items: center;
-            margin-bottom: 16px;
-          }
-          .status-icon {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: ${statusColor};
-            margin-right: 8px;
-          }
-          .attributes {
-            margin-top: 16px;
-          }
-          .attribute {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 4px;
-          }
-          .control-btn {
-            --mdc-theme-primary: var(--primary-color);
-            margin-top: 16px;
-            width: 100%;
-            ${!isOnline ? 'opacity: 0.5; pointer-events: none;' : ''}
-          }
-          .error {
-            color: var(--error-color);
-            margin-top: 8px;
-          }
-        </style>
         <div class="card-content">
           <div class="status">
-            <div class="status-icon"></div>
+            <div class="status-icon" style="background-color: ${statusColor}"></div>
             <div>${status}</div>
           </div>
           
@@ -152,19 +145,19 @@ export class ESP32RobotCard extends LitElement {
               <div>IP:</div>
               <div>${ipAddress}</div>
             </div>
-            ${isOnline && fps ? `
+            ${isOnline && fps ? html`
               <div class="attribute">
                 <div>FPS:</div>
                 <div>${fps}</div>
               </div>
             ` : ''}
-            ${isOnline && streaming !== undefined ? `
+            ${isOnline && streaming !== undefined ? html`
               <div class="attribute">
                 <div>Streaming:</div>
                 <div>${streaming ? 'Yes' : 'No'}</div>
               </div>
             ` : ''}
-            ${isOnline && this._entity.attributes.last_error ? `
+            ${isOnline && this._entity.attributes.last_error ? html`
               <div class="error">
                 ${this._entity.attributes.last_error}
               </div>

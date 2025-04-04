@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-export class ESP32RobotCardEditor extends LitElement {
+class ESP32RobotCardEditor extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
@@ -40,22 +40,28 @@ export class ESP32RobotCardEditor extends LitElement {
     
     if (!configValue) return;
     
+    // Создаем копию объекта конфигурации
+    const newConfig = { ...this._config };
+    
     if (value === '') {
-      delete this._config[configValue];
+      // Если значение пустое, удаляем свойство из копии объекта
+      if (configValue in newConfig) {
+        delete newConfig[configValue];
+      }
     } else {
-      this._config = {
-        ...this._config,
-        [configValue]: value
-      };
+      // Иначе, устанавливаем новое значение
+      newConfig[configValue] = value;
     }
-
+    
+    // Обновляем конфигурацию
+    this._config = newConfig;
+    
     // Отправляем событие об изменении конфигурации
-    const configChangeEvent = new CustomEvent("config-changed", {
+    this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
       bubbles: true,
       composed: true
-    });
-    this.dispatchEvent(configChangeEvent);
+    }));
   }
 
   render() {
