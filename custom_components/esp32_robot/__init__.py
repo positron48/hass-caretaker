@@ -107,7 +107,10 @@ class ESP32RobotProxyView(HomeAssistantView):
                         headers[name] = value
                 
                 # Get query parameters
-                params = request.query
+                params = dict(request.query)
+                # Remove token if it exists (used for authentication in image requests)
+                if 'token' in params:
+                    del params['token']
                 
                 async with aiohttp.ClientSession() as session:
                     if method == "GET":

@@ -1,5 +1,29 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
+// Add global styles for the dialog popup
+const popupStyles = document.createElement('style');
+popupStyles.textContent = `
+  .esp32-robot-dialog {
+    --popup-bg-color: var(--primary-background-color, #111);
+    --popup-text-color: var(--primary-text-color, #fff);
+    --popup-border-radius: var(--ha-card-border-radius, 4px);
+  }
+  .esp32-robot-dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+  }
+  .ha-button {
+    transition: all 0.2s ease-in-out;
+  }
+  .ha-button:hover {
+    opacity: 0.9;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .ha-button:active {
+    transform: translateY(1px);
+  }
+`;
+document.head.appendChild(popupStyles);
+
 class ESP32RobotCard extends LitElement {
   static get properties() {
     return {
@@ -196,6 +220,7 @@ class ESP32RobotCard extends LitElement {
     // Create a modal dialog
     const dialog = document.createElement('dialog');
     dialog.id = `esp32-robot-dialog-${entityId}`;
+    dialog.className = 'esp32-robot-dialog';
     dialog.style.position = 'fixed';
     dialog.style.top = '0';
     dialog.style.left = '0';
@@ -204,38 +229,73 @@ class ESP32RobotCard extends LitElement {
     dialog.style.padding = '0';
     dialog.style.border = 'none';
     dialog.style.zIndex = '9999';
-    dialog.style.backgroundColor = '#111';
-    dialog.style.overflow = 'hidden';
+    dialog.style.backgroundColor = 'var(--primary-background-color, #111)';
+    dialog.style.color = 'var(--primary-text-color, #fff)';
+    dialog.style.overflow = 'auto';
+    dialog.style.display = 'flex';
+    dialog.style.flexDirection = 'column';
+
+    // Create header with title and close button
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.padding = '16px';
+    header.style.borderBottom = '1px solid var(--divider-color, rgba(255,255,255,0.12))';
+    
+    const headerTitle = document.createElement('h2');
+    headerTitle.textContent = title;
+    headerTitle.style.margin = '0';
+    headerTitle.style.fontSize = '18px';
+    headerTitle.style.fontWeight = '500';
+    
+    const closeButton = document.createElement('button');
+    closeButton.innerHTML = '&times;';
+    closeButton.style.background = 'transparent';
+    closeButton.style.border = 'none';
+    closeButton.style.color = 'var(--primary-text-color, #fff)';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.padding = '4px 8px';
+    closeButton.addEventListener('click', () => {
+      this._stopStream();
+      dialog.close();
+      document.body.removeChild(dialog);
+    });
+    
+    header.appendChild(headerTitle);
+    header.appendChild(closeButton);
 
     // Create container for controls
     const container = document.createElement('div');
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
-    container.style.width = '100%';
-    container.style.height = '100%';
+    container.style.flex = '1';
     container.style.padding = '16px';
     container.style.boxSizing = 'border-box';
-    container.style.color = '#fff';
+    container.style.maxWidth = '960px';
+    container.style.margin = '0 auto';
+    container.style.width = '100%';
 
     // Create video container
     const videoContainer = document.createElement('div');
     videoContainer.style.position = 'relative';
     videoContainer.style.width = '100%';
-    videoContainer.style.maxHeight = '70%';
-    videoContainer.style.aspectRatio = '4/3';
-    videoContainer.style.backgroundColor = '#000';
-    videoContainer.style.borderRadius = '8px';
+    videoContainer.style.backgroundColor = 'var(--card-background-color, #000)';
+    videoContainer.style.borderRadius = 'var(--ha-card-border-radius, 8px)';
     videoContainer.style.overflow = 'hidden';
     videoContainer.style.marginBottom = '16px';
     videoContainer.style.display = 'flex';
     videoContainer.style.justifyContent = 'center';
     videoContainer.style.alignItems = 'center';
+    videoContainer.style.aspectRatio = '4/3';
+    videoContainer.style.maxHeight = '50vh';
 
     // Loading indicator
     const loadingEl = document.createElement('div');
     loadingEl.textContent = 'Loading stream...';
     loadingEl.style.position = 'absolute';
-    loadingEl.style.color = '#fff';
+    loadingEl.style.color = 'var(--primary-text-color, #fff)';
     loadingEl.id = 'loading-indicator';
     videoContainer.appendChild(loadingEl);
 
@@ -248,18 +308,14 @@ class ESP32RobotCard extends LitElement {
     videoImg.id = 'video-stream';
     videoContainer.appendChild(videoImg);
 
-    // Controls container
-    const controlsContainer = document.createElement('div');
-    controlsContainer.style.display = 'flex';
-    controlsContainer.style.flexDirection = 'column';
-    controlsContainer.style.gap = '16px';
-    controlsContainer.style.flex = '1';
-
     // Status display
     const statusContainer = document.createElement('div');
     statusContainer.style.display = 'flex';
     statusContainer.style.justifyContent = 'space-between';
-    statusContainer.style.marginBottom = '8px';
+    statusContainer.style.marginBottom = '16px';
+    statusContainer.style.padding = '8px 16px';
+    statusContainer.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.05))';
+    statusContainer.style.borderRadius = 'var(--ha-card-border-radius, 8px)';
     
     const statusLeft = document.createElement('div');
     statusLeft.id = 'status-left';
@@ -271,15 +327,35 @@ class ESP32RobotCard extends LitElement {
     
     statusContainer.appendChild(statusLeft);
     statusContainer.appendChild(statusRight);
+
+    // Controls grid layout
+    const controlsGrid = document.createElement('div');
+    controlsGrid.style.display = 'grid';
+    controlsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
+    controlsGrid.style.gap = '16px';
     
     // Joystick container
+    const joystickSection = document.createElement('div');
+    joystickSection.style.display = 'flex';
+    joystickSection.style.flexDirection = 'column';
+    
+    const joystickTitle = document.createElement('h3');
+    joystickTitle.textContent = 'Controls';
+    joystickTitle.style.margin = '0 0 8px 0';
+    joystickTitle.style.fontSize = '16px';
+    joystickTitle.style.fontWeight = '500';
+    
     const joystickContainer = document.createElement('div');
     joystickContainer.style.position = 'relative';
     joystickContainer.style.width = '100%';
     joystickContainer.style.aspectRatio = '1/1';
-    joystickContainer.style.backgroundColor = 'rgba(255,255,255,0.1)';
+    joystickContainer.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.1))';
     joystickContainer.style.borderRadius = '50%';
     joystickContainer.style.touchAction = 'none';
+    joystickContainer.style.marginTop = 'auto';
+    joystickContainer.style.marginBottom = 'auto';
+    joystickContainer.style.maxWidth = '300px';
+    joystickContainer.style.alignSelf = 'center';
     joystickContainer.id = 'joystick-container';
     
     // Joystick handle
@@ -296,67 +372,69 @@ class ESP32RobotCard extends LitElement {
     joystickHandle.id = 'joystick-handle';
     joystickContainer.appendChild(joystickHandle);
     
+    joystickSection.appendChild(joystickTitle);
+    joystickSection.appendChild(joystickContainer);
+    
+    // Stream settings section
+    const streamSection = document.createElement('div');
+    streamSection.style.display = 'flex';
+    streamSection.style.flexDirection = 'column';
+    
+    const streamTitle = document.createElement('h3');
+    streamTitle.textContent = 'Stream';
+    streamTitle.style.margin = '0 0 8px 0';
+    streamTitle.style.fontSize = '16px';
+    streamTitle.style.fontWeight = '500';
+    
     // Button container
     const buttonContainer = document.createElement('div');
     buttonContainer.style.display = 'flex';
-    buttonContainer.style.justifyContent = 'space-between';
+    buttonContainer.style.gap = '8px';
     buttonContainer.style.marginTop = '16px';
     
     // Stream toggle button
     const streamButton = document.createElement('button');
     streamButton.textContent = 'Start Stream';
+    streamButton.className = 'ha-button primary';
     streamButton.style.padding = '8px 16px';
-    streamButton.style.borderRadius = '4px';
+    streamButton.style.borderRadius = 'var(--ha-card-border-radius, 4px)';
     streamButton.style.backgroundColor = 'var(--primary-color, #03a9f4)';
-    streamButton.style.color = '#fff';
+    streamButton.style.color = 'var(--text-primary-color, #fff)';
     streamButton.style.border = 'none';
     streamButton.style.cursor = 'pointer';
+    streamButton.style.flex = '1';
     streamButton.id = 'stream-button';
     
     // Fullscreen button
     const fullscreenButton = document.createElement('button');
     fullscreenButton.textContent = 'Fullscreen';
+    fullscreenButton.className = 'ha-button';
     fullscreenButton.style.padding = '8px 16px';
-    fullscreenButton.style.borderRadius = '4px';
-    fullscreenButton.style.backgroundColor = 'rgba(255,255,255,0.2)';
-    fullscreenButton.style.color = '#fff';
+    fullscreenButton.style.borderRadius = 'var(--ha-card-border-radius, 4px)';
+    fullscreenButton.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.1))';
+    fullscreenButton.style.color = 'var(--primary-text-color, #fff)';
     fullscreenButton.style.border = 'none';
     fullscreenButton.style.cursor = 'pointer';
     fullscreenButton.id = 'fullscreen-button';
     
     buttonContainer.appendChild(streamButton);
     buttonContainer.appendChild(fullscreenButton);
-
-    // Create a close button
-    const closeButton = document.createElement('div');
-    closeButton.style.position = 'absolute';
-    closeButton.style.top = '16px';
-    closeButton.style.right = '16px';
-    closeButton.style.zIndex = '10000';
-    closeButton.style.background = 'rgba(0, 0, 0, 0.5)';
-    closeButton.style.color = 'white';
-    closeButton.style.padding = '8px 12px';
-    closeButton.style.borderRadius = '4px';
-    closeButton.style.cursor = 'pointer';
-    closeButton.style.fontWeight = 'bold';
-    closeButton.style.fontSize = '16px';
-    closeButton.textContent = 'Close';
-    closeButton.addEventListener('click', () => {
-      this._stopStream();
-      dialog.close();
-      document.body.removeChild(dialog);
-    });
-
-    // Add all elements to the dialog
-    controlsContainer.appendChild(statusContainer);
-    controlsContainer.appendChild(joystickContainer);
-    controlsContainer.appendChild(buttonContainer);
     
+    streamSection.appendChild(streamTitle);
+    streamSection.appendChild(buttonContainer);
+    
+    // Add all elements to the grid
+    controlsGrid.appendChild(joystickSection);
+    controlsGrid.appendChild(streamSection);
+
+    // Add all elements to the container
     container.appendChild(videoContainer);
-    container.appendChild(controlsContainer);
+    container.appendChild(statusContainer);
+    container.appendChild(controlsGrid);
     
+    // Add elements to the dialog
+    dialog.appendChild(header);
     dialog.appendChild(container);
-    dialog.appendChild(closeButton);
 
     // Add dialog to the document
     document.body.appendChild(dialog);
@@ -381,9 +459,11 @@ class ESP32RobotCard extends LitElement {
       loadingEl.style.display = 'block';
       videoImg.style.display = 'none';
       
-      // Set a random parameter to bypass caching
+      // Set a random parameter to bypass caching and add auth token
       const timestamp = new Date().getTime();
-      videoImg.src = `${streamUrl}?t=${timestamp}`;
+      const token = this._hass.auth.data.access_token;
+      // Add the token as a query parameter
+      videoImg.src = `${streamUrl}?t=${timestamp}&token=${token}`;
       
       videoImg.onload = () => {
         loadingEl.style.display = 'none';
@@ -440,7 +520,11 @@ class ESP32RobotCard extends LitElement {
     // Function to update status
     const updateStatus = async () => {
       try {
-        const response = await fetch(statusUrl);
+        const response = await fetch(statusUrl, {
+          headers: {
+            Authorization: `Bearer ${this._hass.auth.data.access_token}`
+          }
+        });
         if (response.ok) {
           const data = await response.json();
           statusLeft.textContent = `FPS: ${data.fps || '--'}`;
@@ -531,7 +615,10 @@ class ESP32RobotCard extends LitElement {
     this._sendControlCommand = async (url, x, y) => {
       try {
         const response = await fetch(`${url}?x=${x}&y=${y}`, {
-          method: 'POST'
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this._hass.auth.data.access_token}`
+          }
         });
         if (!response.ok) {
           console.error('Control error:', response.status);
