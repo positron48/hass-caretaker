@@ -5,14 +5,14 @@ import voluptuous as vol
 import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.components.http import HomeAssistantView
-from homeassistant.components.http.static import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 import aiohttp
 import async_timeout
 from .const import DOMAIN
 from .sensor import ESP32RobotSensor
 from .frontend import async_setup_frontend
+from pathlib import Path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,10 +38,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
     # Register frontend resources
+    lovelace_path = str(Path(__file__).parent / "lovelace")
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             f"/esp32_robot/frontend",
-            os.path.join(os.path.dirname(__file__), "lovelace"),
+            lovelace_path,
             False
         )
     ])

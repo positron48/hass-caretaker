@@ -1,18 +1,24 @@
 """Register the ESP32 Robot frontend elements."""
 import os
 import logging
-from homeassistant.components.http.static import StaticPathConfig
+from pathlib import Path
+from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_frontend(hass):
     """Set up the ESP32 Robot frontend elements."""
+    # Get file paths
+    should_cache = False
+    card_js_path = str(Path(__file__).parent / "lovelace/esp32-robot-card.js")
+    interface_html_path = str(Path(__file__).parent / "interface.html")
+    
     # Register Lovelace resource for the card JS
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/esp32_robot/frontend/esp32-robot-card.js",
-            os.path.join(os.path.dirname(__file__), "lovelace/esp32-robot-card.js"),
-            False
+            card_js_path,
+            should_cache
         )
     ])
 
@@ -20,8 +26,8 @@ async def async_setup_frontend(hass):
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             "/esp32_robot/interface",
-            os.path.join(os.path.dirname(__file__), "interface.html"),
-            False
+            interface_html_path,
+            should_cache
         )
     ])
     
