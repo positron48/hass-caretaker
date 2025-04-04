@@ -125,7 +125,7 @@ class ESP32RobotSensor(SensorEntity):
         # Добавляем прямой URL к роботу
         attrs["direct_url"] = f"http://{self._ip_address}/"
         
-        # Добавляем дополнительные данные из API, если они есть
+        # Добавляем дополнительные данные из API, если робот онлайн
         if self.coordinator.data and self.coordinator.data.get("status") == "online":
             if "data" in self.coordinator.data and isinstance(self.coordinator.data["data"], dict):
                 # Добавляем данные из статуса, например fps и streaming
@@ -135,8 +135,9 @@ class ESP32RobotSensor(SensorEntity):
                 if "streaming" in robot_data:
                     attrs["streaming"] = robot_data["streaming"]
             
-        if self.coordinator.data and "error" in self.coordinator.data:
-            attrs["last_error"] = self.coordinator.data["error"]
+            # Добавляем ошибку только если робот онлайн
+            if "error" in self.coordinator.data:
+                attrs["last_error"] = self.coordinator.data["error"]
             
         return attrs
 

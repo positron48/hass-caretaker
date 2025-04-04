@@ -103,8 +103,9 @@ class ESP32RobotCard extends LitElement {
     const ipAddress = stateObj.attributes.ip_address || "";
     const fps = stateObj.attributes.fps || 0;
     const streaming = stateObj.attributes.streaming || false;
-    const directUrl = stateObj.attributes.direct_url || "";
-    const lastError = stateObj.attributes.last_error || "";
+    
+    // Показываем ошибку только если статус онлайн и есть сообщение об ошибке
+    const lastError = status === 'online' ? (stateObj.attributes.last_error || "") : "";
     
     return html`
       <ha-card>
