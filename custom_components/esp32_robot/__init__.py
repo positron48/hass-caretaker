@@ -6,6 +6,7 @@ import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http.static import StaticPathConfig
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 import aiohttp
 import async_timeout
@@ -34,22 +35,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.http.register_view(ESP32RobotProxyView(hass))
     
     # Forward to sensor platform
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, SENSOR_DOMAIN)
-    )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
     # Register frontend resources
-    frontend_path = os.path.join(os.path.dirname(__file__), "lovelace")
-    
-    hass.http.register_static_path(
-        f"/esp32_robot/frontend", frontend_path, cache_headers=False
-    )
+    await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            f"/esp32_robot/frontend",
+            os.path.join(os.path.dirname(__file__), "lovelace"),
+            False
+        )
+    ])
     
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_forward_entry_unload(entry, SENSOR_DOMAIN)
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 class ESP32RobotProxyView(HomeAssistantView):
     """View to handle ESP32 Robot requests."""

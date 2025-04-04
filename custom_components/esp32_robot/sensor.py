@@ -31,7 +31,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     )
 
     # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     async_add_entities([ESP32RobotSensor(coordinator, ip_address)], True)
 

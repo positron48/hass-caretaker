@@ -1,11 +1,11 @@
 {
   "domain": "esp32_robot",
   "name": "ESP32 Robot",
-  "documentation": "https://github.com/positronic57/hass-esp32-robot",
-  "issue_tracker": "https://github.com/positronic57/hass-esp32-robot/issues",
+  "documentation": "https://github.com/positron48/hass-esp32-robot",
+  "issue_tracker": "https://github.com/positron48/hass-esp32-robot/issues",
   "dependencies": ["http"],
-  "codeowners": ["@positronic57"],
+  "codeowners": ["@positron48"],
   "requirements": [],
   "config_flow": true,
-  "version": "0.12.3"
+  "version": "0.12.4"
 }
