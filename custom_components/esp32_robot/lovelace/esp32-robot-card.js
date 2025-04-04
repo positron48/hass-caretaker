@@ -103,10 +103,18 @@ class ESP32RobotCard extends LitElement {
     return document.createElement("esp32-robot-card-editor");
   }
 
-  static getStubConfig() {
+  static getStubConfig(hass) {
+    // Попытаемся найти подходящую сущность для карточки
+    const entities = Object.keys(hass.states)
+      .filter(entityId => entityId.startsWith('sensor.esp32_robot') || 
+              (entityId.startsWith('sensor.') && 
+               hass.states[entityId].attributes.direct_url !== undefined));
+    
+    const entity = entities.length > 0 ? entities[0] : "";
+    
     return {
-      entity: "sensor.esp32_robot_status",
-      title: "ESP32 Robot"
+      entity: entity,
+      title: entity ? hass.states[entity].attributes.friendly_name || "ESP32 Robot" : "ESP32 Robot"
     };
   }
 

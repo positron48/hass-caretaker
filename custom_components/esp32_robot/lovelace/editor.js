@@ -29,6 +29,18 @@ class ESP32RobotCardEditor extends LitElement {
         id: entityId,
         name: this.hass.states[entityId].attributes.friendly_name || entityId
       }));
+
+    // Если у нас есть сущности и не установлен entity в конфигурации,
+    // установим первую доступную сущность
+    if (this._entities.length > 0 && (!this._config.entity || this._config.entity === '')) {
+      const newConfig = { ...this._config, entity: this._entities[0].id };
+      this._config = newConfig;
+      this.dispatchEvent(new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true
+      }));
+    }
   }
 
   _valueChanged(event) {
