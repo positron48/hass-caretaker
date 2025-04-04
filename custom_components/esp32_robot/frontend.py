@@ -3,7 +3,6 @@ import os
 import logging
 from pathlib import Path
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.components.lovelace import async_register_resources
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,15 +27,6 @@ async def async_setup_frontend(hass):
             should_cache
         )
     ])
-
-    # Register the card as a Lovelace resource
-    resources = [
-        {
-            "url": "/esp32_robot/frontend/esp32-robot-card.js",
-            "type": "module"
-        }
-    ]
-    await async_register_resources(hass, resources)
 
     # Register interface HTML
     await hass.http.async_register_static_paths([
