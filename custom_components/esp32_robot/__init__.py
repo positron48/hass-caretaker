@@ -21,7 +21,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the ESP32 Robot component from configuration.yaml."""
     hass.data.setdefault(DOMAIN, {})
     
-    # Настраиваем frontend для карточки Lovelace
+    # Setup frontend for Lovelace card
     await async_setup_frontend(hass)
     
     return True
