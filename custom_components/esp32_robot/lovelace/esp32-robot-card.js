@@ -581,9 +581,13 @@ class ESP32RobotCard extends LitElement {
       
       console.log("Signed URL response:", result);
       
-      if (result?.result?.path) {
-        return result.result.path;  // Подписанный путь с ?authSig=...
+      // Handle the response format correctly - the signed URL is directly in the path property
+      if (result?.path) {
+        return result.path;  // The signed path with ?authSig=...
+      } else if (result?.result?.path) {
+        return result.result.path;  // Alternative format just in case
       } else {
+        console.error("Invalid response format:", result);
         throw new Error("Failed to get signed path");
       }
     } catch (error) {
