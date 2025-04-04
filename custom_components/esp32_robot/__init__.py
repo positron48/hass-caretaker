@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.helpers import entity_registry
 import aiohttp
 import async_timeout
 from .const import DOMAIN
@@ -74,62 +75,95 @@ class ESP32RobotProxyView(HomeAssistantView):
     
     async def _proxy_request(self, request, sensor_id, path, method):
         """Proxy requests to the robot."""
-        # Find the sensor entity
-        for entity_id, entity in self.hass.data.get(SENSOR_DOMAIN, {}).items():
-            if entity_id.endswith(sensor_id) and isinstance(entity, ESP32RobotSensor):
-                sensor = entity
-                break
-        else:
-            return self.json_message("Sensor not found", 404)
-        
-        # Check if robot is online
-        if sensor.state != "online":
-            return self.json_message("Robot is offline", 503)
-        
-        # Get robot IP address
-        ip_address = sensor.ip_address
-        if not ip_address:
-            return self.json_message("Robot IP address not available", 500)
-        
-        # Forward request to robot
-        url = f"http://{ip_address}/{path}"
-        
         try:
-            async with async_timeout.timeout(10):
-                data = None
-                if method == "POST":
-                    data = await request.read()
+            # Debug sensor domain and hass.data keys
+            _LOGGER.debug("SENSOR_DOMAIN = %s", SENSOR_DOMAIN)
+            _LOGGER.debug("hass.data keys: %s", list(self.hass.data.keys()))
+            
+            # Reconstruct full entity_id
+            full_entity_id = f"sensor.{sensor_id}"
+            _LOGGER.debug("Looking for sensor entity with ID: %s", full_entity_id)
+            
+            # First try to get the entity from the entity registry
+            er = entity_registry.async_get(self.hass)
+            entity_entry = er.async_get(full_entity_id)
+            
+            if entity_entry:
+                _LOGGER.debug("Found entity in registry: %s (platform: %s)", 
+                             entity_entry.entity_id, entity_entry.platform)
+            else:
+                _LOGGER.debug("Entity not found in registry: %s", full_entity_id)
+            
+            # Try to get the entity state directly
+            state = self.hass.states.get(full_entity_id)
+            entity = None
+            
+            if state is not None:
+                _LOGGER.debug("Found entity state by direct lookup: %s (state: %s)", full_entity_id, state.state)
+                _LOGGER.debug("State attributes: %s", state.attributes)
                 
-                # Copy original headers (except host and authorization)
-                headers = {}
-                for name, value in request.headers.items():
-                    if name.lower() not in ('host', 'authorization'):
-                        headers[name] = value
+                # Try to get the IP address from state attributes
+                ip_address = state.attributes.get('ip_address')
                 
-                # Get query parameters
-                params = dict(request.query)
+                if ip_address:
+                    _LOGGER.debug("Using IP address from state attributes: %s", ip_address)
+                    
+                    # Check if robot is online based on state value
+                    if state.state != "online":
+                        return self.json_message("Robot is offline", 503)
+                    
+                    # Forward request to robot
+                    url = f"http://{ip_address}/{path}"
+                    _LOGGER.debug("Forwarding request to robot at %s: %s %s", ip_address, method, path)
+                    
+                    try:
+                        async with async_timeout.timeout(10):
+                            data = None
+                            if method == "POST":
+                                data = await request.read()
+                            
+                            # Copy original headers (except host and authorization)
+                            headers = {}
+                            for name, value in request.headers.items():
+                                if name.lower() not in ('host', 'authorization'):
+                                    headers[name] = value
+                            
+                            # Get query parameters
+                            params = dict(request.query)
+                            
+                            # Create a client session and make the request
+                            async with aiohttp.ClientSession() as session:
+                                if method == "GET":
+                                    async with session.get(url, params=params, headers=headers) as response:
+                                        content_type = response.headers.get('Content-Type', 'application/json')
+                                        if 'image' in content_type or 'stream' in content_type:
+                                            # For images or streams, return raw content
+                                            data = await response.read()
+                                            return aiohttp.web.Response(body=data, content_type=content_type)
+                                        else:
+                                            # For other responses, return as JSON or text
+                                            text = await response.text()
+                                            return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
+                                else:  # POST
+                                    async with session.post(url, params=params, data=data, headers=headers) as response:
+                                        text = await response.text()
+                                        content_type = response.headers.get('Content-Type', 'application/json')
+                                        return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
+                    
+                    except asyncio.TimeoutError:
+                        return self.json_message("Request to robot timed out", 504)
+                    except Exception as e:
+                        _LOGGER.error("Error forwarding request to robot: %s", str(e))
+                        return self.json_message(f"Error: {str(e)}", 500)
                 
-                # Create a client session and make the request
-                async with aiohttp.ClientSession() as session:
-                    if method == "GET":
-                        async with session.get(url, params=params, headers=headers) as response:
-                            content_type = response.headers.get('Content-Type', 'application/json')
-                            if 'image' in content_type or 'stream' in content_type:
-                                # For images or streams, return raw content
-                                data = await response.read()
-                                return aiohttp.web.Response(body=data, content_type=content_type)
-                            else:
-                                # For other responses, return as JSON or text
-                                text = await response.text()
-                                return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
-                    else:  # POST
-                        async with session.post(url, params=params, data=data, headers=headers) as response:
-                            text = await response.text()
-                            content_type = response.headers.get('Content-Type', 'application/json')
-                            return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
-        
-        except asyncio.TimeoutError:
-            return self.json_message("Request to robot timed out", 504)
+                else:
+                    _LOGGER.error("IP address not found in entity attributes")
+                    return self.json_message("Robot IP address not available", 500)
+            
+            else:
+                _LOGGER.error("Sensor state not found for ID: %s", full_entity_id)
+                return self.json_message("Sensor not found", 404)
+                
         except Exception as e:
-            _LOGGER.error("Error proxying request to robot: %s", str(e))
-            return self.json_message(f"Error: {str(e)}", 500) 
+            _LOGGER.error("Unexpected error in proxy request: %s", str(e))
+            return self.json_message(f"Server error: {str(e)}", 500) 
