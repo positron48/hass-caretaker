@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
 
-class ESP32RobotCardEditor extends LitElement {
+export class ESP32RobotCardEditor extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },
@@ -109,8 +109,6 @@ class ESP32RobotCardEditor extends LitElement {
     `;
   }
 }
-
-customElements.define("esp32-robot-card-editor", ESP32RobotCardEditor);
 
 // Карточка регистрируется только в основном файле карточки (esp32-robot-card.js)
 // Удаляем дублирующую регистрацию здесь 

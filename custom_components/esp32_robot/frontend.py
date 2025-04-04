@@ -10,12 +10,18 @@ async def async_setup_frontend(hass):
     """Set up the ESP32 Robot frontend elements."""
     # Get file paths
     should_cache = False
+    module_js_path = str(Path(__file__).parent / "lovelace/card-module.js")
     card_js_path = str(Path(__file__).parent / "lovelace/esp32-robot-card.js")
     editor_js_path = str(Path(__file__).parent / "lovelace/editor.js")
     interface_html_path = str(Path(__file__).parent / "interface.html")
     
-    # Register Lovelace resource for the card JS and editor
+    # Register Lovelace resources
     await hass.http.async_register_static_paths([
+        StaticPathConfig(
+            "/esp32_robot/card-module.js",
+            module_js_path,
+            should_cache
+        ),
         StaticPathConfig(
             "/esp32_robot/frontend/esp32-robot-card.js",
             card_js_path,

@@ -47,6 +47,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     ])
     
+    # Register card as a Lovelace resource
+    # This is done during setup entry to make sure it's always available
+    hass.data[DOMAIN].setdefault("resources", set())
+    resource_url = "/esp32_robot/card-module.js"
+    
+    if resource_url not in hass.data[DOMAIN]["resources"]:
+        hass.data[DOMAIN]["resources"].add(resource_url)
+        hass.components.frontend.async_register_built_in_panel(
+            "iframe",
+            "esp32_robot",
+            "ESP32 Robot",
+            "mdi:robot",
+            {"url": "/esp32_robot/interface"},
+            require_admin=False,
+        )
+        
+        # Add to Lovelace resources
+        if hasattr(hass, "data") and "lovelace" in hass.data:
+            if "resources" not in hass.data["lovelace"]:
+                hass.data["lovelace"]["resources"] = []
+                
+            # Add as module if not already there
+            if not any(r.get("url") == resource_url for r in hass.data["lovelace"]["resources"]):
+                hass.data["lovelace"]["resources"].append({
+                    "url": resource_url,
+                    "type": "module"
+                })
+    
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
