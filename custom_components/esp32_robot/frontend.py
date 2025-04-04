@@ -9,10 +9,9 @@ async def async_setup_frontend(hass):
     """Set up the ESP32 Robot frontend elements."""
     await async_register_built_in_panel(
         hass,
+        panel_title="ESP32 Robot",
+        panel_icon="mdi:robot",
         frontend_url_path="esp32_robot",
-        module_url="/api/esp32_robot/interface",
-        sidebar_title="ESP32 Robot",
-        sidebar_icon="mdi:robot",
         require_admin=True
     )
     
