@@ -17,21 +17,33 @@ This integration allows you to monitor and control your ESP32-based robots throu
 The ESP32 Robot integration implements secure video streaming using Home Assistant's signed URL feature. This ensures that:
 
 1. **Authorization Required**: All streams are protected by Home Assistant's authentication system.
-2. **Signed URLs**: The integration generates time-limited signed URLs for streams, which can be used even in contexts where standard authentication headers aren't supported (like `<img>` tags).
-3. **Limited Validity**: Signed URLs expire after 2 minutes by default, requiring clients to refresh them periodically.
+2. **Signed URLs**: The integration generates time-limited signed URLs for streams using Home Assistant's WebSocket API, which can be used even in contexts where standard authentication headers aren't supported (like `<img>` tags).
+3. **Limited Validity**: Signed URLs expire after about 2 minutes by default, with automatic renewal in the frontend.
 4. **Proxy Protection**: All communication with your ESP32 robot goes through Home Assistant's proxy system, avoiding direct exposure of your robot's IP address to clients.
-5. **Dual Authentication**: The integration supports both standard Home Assistant authentication tokens and signed URLs, giving you flexibility in how you access streams.
 
 This security model ensures that your robot's video stream can only be accessed by authorized users, even when embedded in cards or shared within your Home Assistant dashboard.
 
 ### Authentication Technical Details
 
-The integration uses Home Assistant's built-in `auth_signature_valid` mechanism to verify signed URLs. When Home Assistant receives a request with an `authSig` parameter in the URL:
+The integration uses Home Assistant's built-in WebSocket API for generating signed URLs:
 
-1. It automatically validates the signature
-2. If valid, it sets `request["auth_signature_valid"] = True`
-3. Our integration checks either for a standard authenticated user (`hass_user`) or a valid signature (`auth_signature_valid`)
-4. If neither is present, it returns a 401 Unauthorized response
+1. The frontend uses the `auth/sign_path` WebSocket command to generate a signed URL:
+   ```javascript
+   const message = {
+     id: messageId,
+     type: "auth/sign_path",
+     path: "/api/esp32_robot/proxy/{robot_id}/stream",
+     expires: 110 // seconds
+   };
+   ```
+
+2. Home Assistant returns a signed URL that includes an `authSig` parameter.
+
+3. The frontend uses this signed URL in the `<img>` tag to display the stream.
+
+4. Home Assistant's built-in authentication system validates the `authSig` parameter when the URL is accessed.
+
+5. The frontend automatically refreshes the signed URL before it expires to ensure uninterrupted streaming.
 
 This approach follows Home Assistant's recommended security practices for handling authenticated streams.
 
@@ -43,16 +55,30 @@ The stream is securely displayed in the control interface that opens when you cl
 
 ### Embedding Stream in Other Cards
 
-If you want to embed the robot's stream in other cards or UIs, you should always use the signed URL API to get a secure URL:
+If you want to embed the robot's stream in other cards or UIs, you should always use the WebSocket API to get a signed URL:
 
 ```javascript
-// Example of how to get a signed URL for a stream
-const response = await hass.fetchWithAuth(`/api/esp32_robot/get_signed_url?id=${robotId}`);
-const data = await response.json();
-const signedUrl = data.signed_url;
+// Example of how to get a signed URL for a stream using WebSocket
+const messageId = Math.floor(Math.random() * 1000);
+const message = {
+  id: messageId,
+  type: "auth/sign_path",
+  path: `/api/esp32_robot/proxy/${robotId}/stream`,
+  expires: 110 // seconds
+};
 
-// Now you can use this URL in an img tag
-document.getElementById('my-stream-img').src = signedUrl;
+// Set up event listener for response
+const handleMessage = (event) => {
+  const response = JSON.parse(event.data);
+  if (response.id === messageId && response.success) {
+    const signedUrl = response.result.path;
+    document.getElementById('my-stream-img').src = signedUrl;
+  }
+};
+
+// Send WebSocket message
+hass.connection.addEventListener('message', handleMessage);
+hass.connection.sendMessage(message);
 ```
 
 ## Troubleshooting
@@ -69,24 +95,10 @@ If the stream isn't loading, check:
 
 If you're having issues with stream authentication:
 
-1. Make sure you're using the signed URL API and not trying to access the stream directly
+1. Make sure you're using the WebSocket API to generate signed URLs
 2. Check that your Home Assistant authentication is working properly
-3. Verify that your signed URLs aren't expired (they only last 2 minutes)
-
-## API Documentation
-
-### Get Signed URL
-
-`GET /api/esp32_robot/get_signed_url?id={robot_id}`
-
-Returns a JSON object containing:
-- `signed_url`: The signed URL that can be used to access the stream
-- `expires_in`: How long the URL is valid for (in seconds)
-- `robot_id`: The ID of the robot
-- `ip_address`: The IP address of the robot
-- `state`: The current state of the robot
-
-This endpoint requires Home Assistant authentication.
+3. Verify that your signed URLs aren't expired (they only last about 2 minutes)
+4. Check the browser console for any errors related to WebSocket communication
 
 ## Advanced Configuration
 

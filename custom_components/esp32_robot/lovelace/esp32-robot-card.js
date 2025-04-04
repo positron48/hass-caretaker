@@ -457,6 +457,7 @@ class ESP32RobotCard extends LitElement {
   
   _initializeStreaming(entityId, videoImg, loadingEl, streamButton, statusLeft, statusRight) {
     let isStreaming = false;
+    let signedUrlRefreshTimer = null;
     
     // Function to start streaming
     const startStream = async () => {
@@ -467,55 +468,8 @@ class ESP32RobotCard extends LitElement {
       videoImg.style.display = 'none';
       
       try {
-        // Get signed URL for the stream
-        const response = await this._hass.fetchWithAuth(`/api/esp32_robot/get_signed_url?id=${entityId}`, {
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to get signed URL: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        const signedUrl = data.signed_url;
-        console.log("Got signed URL with expiration: " + data.expires_in + " seconds");
-        
-        // For MJPEG streams, we can set the src directly since it's a continuous stream
-        videoImg.src = signedUrl;
-        
-        videoImg.onload = () => {
-          loadingEl.style.display = 'none';
-          videoImg.style.display = 'block';
-          console.log("Stream loaded successfully");
-        };
-        
-        videoImg.onerror = (error) => {
-          console.error("Stream error:", error);
-          loadingEl.textContent = 'Stream error. Please try again.';
-          isStreaming = false;
-          streamButton.textContent = 'Start Stream';
-        };
-        
-        // Automatically refresh the signed URL before it expires
-        // Set a timer to refresh 10 seconds before expiration
-        const refreshTimer = setTimeout(() => {
-          if (isStreaming) {
-            console.log("Refreshing signed URL before expiration");
-            startStream(); // This will get a new signed URL
-          }
-        }, (data.expires_in - 10) * 1000);
-        
-        // Clear the refresh timer if stream is stopped
-        this._stopStreamCleanup = () => {
-          if (refreshTimer) {
-            clearTimeout(refreshTimer);
-          }
-        };
+        // Get a signed URL using the WebSocket API
+        await this._getSignedUrlAndStartStream(entityId, videoImg, loadingEl);
         
         // Poll for status updates
         this._startStatusPolling(entityId, statusLeft, statusRight);
@@ -534,10 +488,10 @@ class ESP32RobotCard extends LitElement {
         this._statusInterval = null;
       }
       
-      // Run any cleanup functions
-      if (this._stopStreamCleanup) {
-        this._stopStreamCleanup();
-        this._stopStreamCleanup = null;
+      // Clear the URL refresh timer
+      if (signedUrlRefreshTimer) {
+        clearTimeout(signedUrlRefreshTimer);
+        signedUrlRefreshTimer = null;
       }
       
       // Send request to stop the stream on the device
@@ -567,6 +521,88 @@ class ESP32RobotCard extends LitElement {
     
     // Do not start stream by default, just show the placeholder
     loadingEl.textContent = 'Click Start Stream button below';
+    
+    // Helper method to get signed URL using WebSocket API and set up automatic refreshing
+    this._getSignedUrlAndStartStream = async (entityId, videoImg, loadingEl) => {
+      // Create a WebSocket message to get a signed path
+      const msgId = Math.floor(Math.random() * 10000);
+      const message = {
+        id: msgId,
+        type: "auth/sign_path",
+        path: `/api/esp32_robot/proxy/${entityId}/stream`,
+        expires: 110 // seconds (slightly less than 2 minutes)
+      };
+      
+      // Send the WebSocket message
+      const signedUrlPromise = new Promise((resolve, reject) => {
+        // Set up a one-time event handler for this specific message ID
+        const handleMessage = (event) => {
+          const response = JSON.parse(event.data);
+          
+          // Check if this is the response to our request
+          if (response.id === msgId) {
+            // Remove the event listener
+            this._hass.connection.removeEventListener('message', handleMessage);
+            
+            if (response.success) {
+              resolve(response.result.path);
+            } else {
+              reject(new Error(`Failed to get signed URL: ${response.error?.message || 'Unknown error'}`));
+            }
+          }
+        };
+        
+        // Add the event listener
+        this._hass.connection.addEventListener('message', handleMessage);
+        
+        // Send the WebSocket message
+        this._hass.connection.sendMessage(message);
+        
+        // Set a timeout to prevent hanging if no response
+        setTimeout(() => {
+          this._hass.connection.removeEventListener('message', handleMessage);
+          reject(new Error('Timeout getting signed URL'));
+        }, 10000);
+      });
+      
+      try {
+        // Get the signed URL
+        const signedUrl = await signedUrlPromise;
+        
+        // Set up the video stream with the signed URL
+        videoImg.src = this._hass.hassUrl(signedUrl);
+        
+        videoImg.onload = () => {
+          loadingEl.style.display = 'none';
+          videoImg.style.display = 'block';
+        };
+        
+        videoImg.onerror = (error) => {
+          console.error("Stream error:", error);
+          loadingEl.textContent = 'Stream error. Please try again.';
+          isStreaming = false;
+          streamButton.textContent = 'Start Stream';
+        };
+        
+        // Set up automatic URL refresh before expiration (refresh 10 seconds early)
+        if (signedUrlRefreshTimer) {
+          clearTimeout(signedUrlRefreshTimer);
+        }
+        
+        signedUrlRefreshTimer = setTimeout(() => {
+          if (isStreaming) {
+            console.log("Refreshing signed URL before expiration");
+            this._refreshSignedUrl(entityId, videoImg, loadingEl).catch(error => {
+              console.error("Error refreshing signed URL:", error);
+            });
+          }
+        }, (message.expires - 10) * 1000);
+        
+      } catch (error) {
+        console.error("Error getting signed URL:", error);
+        throw error;
+      }
+    };
   }
   
   _startStatusPolling(entityId, statusLeft, statusRight) {
@@ -735,6 +771,89 @@ class ESP32RobotCard extends LitElement {
       }
     });
   }
+
+  // Separate method for refreshing to avoid recursion issues
+  _refreshSignedUrl = async (entityId, videoImg, loadingEl) => {
+    // Create a WebSocket message to get a signed path
+    const msgId = Math.floor(Math.random() * 10000);
+    const message = {
+      id: msgId,
+      type: "auth/sign_path",
+      path: `/api/esp32_robot/proxy/${entityId}/stream`,
+      expires: 110 // seconds (slightly less than 2 minutes)
+    };
+    
+    try {
+      // Send the WebSocket message
+      const signedUrlPromise = new Promise((resolve, reject) => {
+        // Set up a one-time event handler for this specific message ID
+        const handleMessage = (event) => {
+          const response = JSON.parse(event.data);
+          
+          // Check if this is the response to our request
+          if (response.id === msgId) {
+            // Remove the event listener
+            this._hass.connection.removeEventListener('message', handleMessage);
+            
+            if (response.success) {
+              resolve(response.result.path);
+            } else {
+              reject(new Error(`Failed to get signed URL: ${response.error?.message || 'Unknown error'}`));
+            }
+          }
+        };
+        
+        // Add the event listener
+        this._hass.connection.addEventListener('message', handleMessage);
+        
+        // Send the WebSocket message
+        this._hass.connection.sendMessage(message);
+        
+        // Set a timeout to prevent hanging if no response
+        setTimeout(() => {
+          this._hass.connection.removeEventListener('message', handleMessage);
+          reject(new Error('Timeout getting signed URL'));
+        }, 10000);
+      });
+      
+      // Get the signed URL
+      const signedUrl = await signedUrlPromise;
+      
+      // Update the video stream with the new signed URL
+      // Only update if we're still streaming to avoid race conditions
+      if (isStreaming) {
+        console.log("Updating stream with new signed URL");
+        videoImg.src = this._hass.hassUrl(signedUrl);
+        
+        // Set up the next refresh
+        if (signedUrlRefreshTimer) {
+          clearTimeout(signedUrlRefreshTimer);
+        }
+        
+        signedUrlRefreshTimer = setTimeout(() => {
+          if (isStreaming) {
+            console.log("Refreshing signed URL before expiration");
+            this._refreshSignedUrl(entityId, videoImg, loadingEl).catch(error => {
+              console.error("Error refreshing signed URL:", error);
+            });
+          }
+        }, (message.expires - 10) * 1000);
+      }
+    } catch (error) {
+      console.error("Error refreshing signed URL:", error);
+      // If refresh fails but we're still streaming, try again after a delay
+      if (isStreaming) {
+        console.log("Retrying to refresh signed URL in 5 seconds...");
+        setTimeout(() => {
+          if (isStreaming) {
+            this._refreshSignedUrl(entityId, videoImg, loadingEl).catch(error => {
+              console.error("Retry error refreshing signed URL:", error);
+            });
+          }
+        }, 5000);
+      }
+    }
+  };
 }
 
 customElements.define("esp32-robot-card", ESP32RobotCard);
