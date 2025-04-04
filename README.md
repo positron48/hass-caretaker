@@ -1,111 +1,106 @@
-# ESP32 Robot - Home Assistant Integration
+# ESP32 Robot Integration for Home Assistant
 
-This integration allows you to control and monitor your ESP32-CAM robot through Home Assistant.
+Эта интеграция позволяет мониторить статус ESP32-роботов в вашей системе Home Assistant и отображать информацию на панели Lovelace.
 
-## Features
+## Возможности
 
-- Displays status of your robot
-- Provides iframe to access robot's web interface
-- Monitors robot availability and bluetooth status
-- Configurable status check interval
-- Custom Lovelace card with status display and robot control interface
-- Built-in proxy server for accessing your robot from external networks
+- Мониторинг статуса робота в реальном времени (онлайн/оффлайн)
+- Отображение информации о стриминге и FPS
+- Пользовательская карточка Lovelace для удобного отображения
+- Настраиваемый интервал обновления данных
 
-## Installation
+## Установка
 
-### HACS (Recommended)
+1. Скопируйте папку `esp32_robot` в директорию `custom_components` вашего Home Assistant.
+2. Перезапустите Home Assistant.
+3. Добавьте интеграцию через UI (Настройки > Интеграции > Добавить интеграцию).
 
-1. Add this repository as a custom repository in HACS:
-   - Go to HACS in your Home Assistant instance
-   - Click on "Integrations"
-   - Click the three dots in the top right corner and select "Custom repositories"
-   - Add the URL of this repository and select "Integration" as the category
-   - Click "Add"
+## Настройка
 
-2. Search for "ESP32 Robot" in HACS and install it
+1. Введите IP-адрес вашего ESP32-робота
+2. Опционально установите пользовательское имя для робота
+3. Опционально настройте интервал обновления статуса (в секундах)
 
-3. Restart Home Assistant
+## Информация о сенсоре
 
-### Manual Installation
+Интеграция создаёт сенсор со следующими атрибутами:
 
-1. Copy the `custom_components/esp32_robot` directory to your Home Assistant's `custom_components` directory
-2. Restart Home Assistant
+- **Состояние**: Показывает, находится ли робот в состоянии "online" или "offline"
+- **Атрибуты**:
+  - `ip_address`: IP-адрес робота
+  - `direct_url`: Прямой URL для доступа к интерфейсу робота
+  - `fps`: Текущий FPS камеры (если робот онлайн и стримит)
+  - `streaming`: Статус стриминга (если робот онлайн)
+  - `last_error`: Информация о последней ошибке (только если робот онлайн)
 
-## Configuration
+## Карточка Lovelace
 
-1. Go to "Configuration" -> "Integrations" in Home Assistant
-2. Click the "+" button to add a new integration
-3. Search for "ESP32 Robot" and select it
-4. Enter the following details:
-   - IP address: The IP address of your ESP32 robot
-   - Name (optional): Custom name for your robot
-   - Scan interval (optional): How often to check robot status in seconds (default: 60)
-5. Click "Submit"
+Интеграция включает пользовательскую карточку Lovelace для отображения статуса робота.
 
-## Proxy Server
+### Автоматическая установка
 
-The integration includes a built-in proxy server that allows you to access your robot's web interface from outside your local network. When you add a robot to the integration, it's automatically registered with the proxy server. 
+После установки и настройки интеграции, карточка будет автоматически зарегистрирована в Home Assistant и доступна для добавления на панель Lovelace.
 
-This works as follows:
-- Your Home Assistant instance is accessible from the internet via your domain
-- The robot is only accessible on your local network
-- The integration acts as a middle-man, proxying all requests between the external client and the local robot
+### Добавление карточки на панель
 
-### Direct Access URL
+1. Перейдите на панель Lovelace
+2. Нажмите кнопку редактирования (три точки в правом верхнем углу)
+3. Выберите "Добавить карточку"
+4. Найдите "ESP32 Robot Card" в списке или выберите "Пользовательская" и введите следующую конфигурацию:
 
-Starting from version 0.5.2, you can access your robot's web interface directly using the proxy URL without authentication:
-
-```
-https://your-home-assistant-domain/api/esp32_robot_proxy/<robot-id>/
+```yaml
+type: 'custom:esp32-robot-card'
+entity: sensor.esp32_robot_status
+title: 'Мой робот'
 ```
 
-The robot-id is automatically generated when you add the robot to Home Assistant.
+### Внешний вид карточки
 
-### Security Note
+Карточка показывает:
+- Статус робота (онлайн/оффлайн) с соответствующей иконкой
+- IP-адрес робота (если онлайн)
+- Статус стриминга (если робот онлайн)
+- FPS видеопотока (если робот онлайн и стримит)
 
-Authentication for the proxy server has been disabled to allow direct access to the robot's web interface. This makes it easier to use but reduces security. If security is a concern, consider using the ESP32 Robot Card within Home Assistant instead, as it still benefits from Home Assistant's authentication system.
+Для улучшения пользовательского опыта, ошибки подключения не отображаются, когда робот оффлайн, чтобы не загромождать интерфейс технической информацией.
 
-## API Endpoints
+## Техническая информация
 
-The integration uses these API endpoints:
+### API робота
 
-- Status check: `http://<ip_address>/bt/status`
-- Proxy: `/api/esp32_robot_proxy/<robot-id>/`
+Интеграция периодически запрашивает эндпоинт `/status` на вашем ESP32-роботе. Этот эндпоинт должен возвращать JSON-ответ примерно такого формата:
 
-## Usage
+```json
+{
+  "streaming": true,
+  "fps": 25
+}
+```
 
-### Sensor Entity
+### Обработка ошибок
 
-After setup, a sensor entity will be created showing your robot's status. This sensor includes attributes such as:
+- Таймауты соединения и ошибки сети интерпретируются как статус "offline"
+- Невалидный JSON считается как статус "offline"
+- Ошибки HTTP считаются как статус "offline"
+- Информация об ошибках сохраняется, но отображается только когда робот онлайн
 
-- IP address
-- Iframe URL (proxied)
-- Direct URL (local network only)
-- Bluetooth status
-- Bluetooth connection status
+## Решение проблем
 
-### Custom Lovelace Card
+Если у вас возникли проблемы с интеграцией:
 
-A custom Lovelace card is automatically registered with this integration. To add it to your dashboard:
+1. Убедитесь, что робот включен и подключен к вашей сети
+2. Проверьте, что IP-адрес указан правильно
+3. Проверьте логи Home Assistant на наличие ошибок
+4. Попробуйте увеличить интервал сканирования, если робот не успевает отвечать
+5. Убедитесь, что эндпоинт `/status` на роботе работает корректно
 
-1. Go to your dashboard
-2. Click the "Edit Dashboard" button
-3. Click the "+" button to add a new card
-4. Find "ESP32 Robot Card" in the list of cards
-5. Configure the card:
-   - Select the ESP32 Robot sensor entity
-   - Set an optional title
-6. Click "Save"
+## Совместимость
 
-If the card doesn't appear in the list:
-1. Go to "Configuration" -> "Lovelace Dashboards" -> "Resources"
-2. Verify that `/esp32_robot/esp32-robot-card.js` is in the list
-3. If not, restart Home Assistant or add it manually
+- Требуется Home Assistant 2023.3.0 или новее
+- Робот должен иметь эндпоинт `/status`, возвращающий JSON-данные
+- Поддерживаются все темы Home Assistant
+- Корректно работает в мобильном приложении 
 
-## Changelog
+## Технические детали
 
-See the [CHANGELOG.md](CHANGELOG.md) file for details about each release.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 
+Детали реализации описаны в [architecture.md](architecture.md).
