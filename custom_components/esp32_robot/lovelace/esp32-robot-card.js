@@ -458,6 +458,7 @@ class ESP32RobotCard extends LitElement {
   _initializeStreaming(entityId, videoImg, loadingEl, streamButton, statusLeft, statusRight) {
     const streamUrl = `/api/esp32_robot/proxy/${entityId}/stream`;
     let isStreaming = false;
+    let mjpegController = null;
     
     // Function to start streaming
     const startStream = () => {
@@ -466,23 +467,255 @@ class ESP32RobotCard extends LitElement {
       loadingEl.style.display = 'block';
       videoImg.style.display = 'none';
       
-      // For MJPEG streams, we can set the src directly since it's a continuous stream
-      const timestamp = new Date().getTime();
-      videoImg.src = this._hass.hassUrl(`${streamUrl}?t=${timestamp}`);
-      
-      videoImg.onload = () => {
-        loadingEl.style.display = 'none';
-        videoImg.style.display = 'block';
-      };
-      
-      videoImg.onerror = () => {
-        loadingEl.textContent = 'Stream error. Please try again.';
+      // Native MJPEG streaming with authentication
+      try {
+        // Create AbortController to allow stopping the stream
+        const controller = new AbortController();
+        const signal = controller.signal;
+        mjpegController = controller;
+        
+        // Start the MJPEG stream with authenticated fetch
+        if (typeof ReadableStream === 'undefined' || !window.TextEncoder) {
+          // Fallback for browsers without ReadableStream or TextEncoder support
+          console.log('Using fallback streaming method (not all browsers support ReadableStream)');
+          this._fetchSingleFrame(streamUrl, videoImg, loadingEl, signal);
+        } else {
+          this._processMjpegStream(streamUrl, videoImg, loadingEl, signal)
+            .catch(error => {
+              console.warn('MJPEG streaming failed, falling back to single frame approach:', error);
+              this._fetchSingleFrame(streamUrl, videoImg, loadingEl, signal);
+            });
+        }
+        
+        // Poll for status updates
+        this._startStatusPolling(entityId, statusLeft, statusRight);
+      } catch (error) {
+        console.error('Error setting up stream:', error);
+        loadingEl.textContent = 'Failed to setup stream. Please try again.';
         isStreaming = false;
         streamButton.textContent = 'Start Stream';
-      };
+      }
+    };
+    
+    // Function to process MJPEG stream
+    this._processMjpegStream = async (url, imgElement, loadingEl, signal) => {
+      try {
+        // Add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const streamUrlWithTimestamp = `${url}?t=${timestamp}`;
+        
+        console.log('Starting MJPEG stream with authenticated request');
+        
+        // Fetch with authentication
+        const response = await this._hass.fetchWithAuth(streamUrlWithTimestamp, {
+          method: 'GET',
+          signal: signal,
+          headers: {
+            'Accept': 'multipart/x-mixed-replace'
+          }
+        });
+        
+        if (!response.ok) {
+          const errorMsg = `HTTP error! status: ${response.status}`;
+          console.error(errorMsg);
+          loadingEl.textContent = `Stream error: ${response.status} ${response.statusText}`;
+          throw new Error(errorMsg);
+        }
+        
+        if (!response.body) {
+          const errorMsg = 'ReadableStream not supported in this browser';
+          console.error(errorMsg);
+          loadingEl.textContent = errorMsg;
+          throw new Error(errorMsg);
+        }
+        
+        // Get content type to verify it's a MJPEG stream
+        const contentType = response.headers.get('Content-Type') || '';
+        console.log('Stream Content-Type:', contentType);
+        
+        if (!contentType.includes('multipart/x-mixed-replace')) {
+          // If it's not a multipart stream, show warning and treat as a single image
+          console.warn('Not a MJPEG stream, content type:', contentType);
+          const blob = await response.blob();
+          imgElement.src = URL.createObjectURL(blob);
+          imgElement.style.display = 'block';
+          loadingEl.style.display = 'none';
+          return;
+        }
+        
+        // MJPEG stream handling
+        const reader = response.body.getReader();
+        const boundary = this._extractBoundary(contentType);
+        let buffer = new Uint8Array(0);
+        
+        // Show the image element once we start processing
+        imgElement.style.display = 'block';
+        loadingEl.style.display = 'none';
+        
+        // Frame reading loop
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          // Append new data to buffer
+          const newBuffer = new Uint8Array(buffer.length + value.length);
+          newBuffer.set(buffer);
+          newBuffer.set(value, buffer.length);
+          buffer = newBuffer;
+          
+          // Process frames in buffer
+          const frameStart = this._findNextFrame(buffer, boundary);
+          if (frameStart > 0) {
+            const frameEnd = this._findNextFrame(buffer.subarray(frameStart + 1), boundary);
+            
+            if (frameEnd > 0) {
+              const frame = buffer.subarray(frameStart, frameStart + frameEnd + 1);
+              const imgBlob = this._extractJpegFromFrame(frame);
+              
+              if (imgBlob) {
+                imgElement.src = URL.createObjectURL(imgBlob);
+                // Clean up previous blob to prevent memory leaks
+                if (imgElement._blobUrl) {
+                  URL.revokeObjectURL(imgElement._blobUrl);
+                }
+                imgElement._blobUrl = imgElement.src;
+              }
+              
+              // Remove processed frame from buffer
+              buffer = buffer.subarray(frameStart + frameEnd + 1);
+            }
+          }
+          
+          // Safety check to prevent buffer from growing too large
+          if (buffer.length > 10000000) { // 10MB limit
+            console.warn('Buffer size exceeded, resetting');
+            buffer = new Uint8Array(0);
+          }
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.log('MJPEG stream aborted');
+        } else {
+          console.error('MJPEG stream error:', error);
+          loadingEl.textContent = `Stream error: ${error.message}`;
+          loadingEl.style.display = 'block';
+          imgElement.style.display = 'none';
+          throw error; // Rethrow to trigger fallback
+        }
+      }
+    };
+    
+    // Extract boundary from content type
+    this._extractBoundary = (contentType) => {
+      const matches = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+      if (!matches) {
+        return '--boundary';
+      }
+      return '--' + (matches[1] || matches[2]);
+    };
+    
+    // Find the next frame boundary in the buffer
+    this._findNextFrame = (buffer, boundary) => {
+      const boundaryBytes = new TextEncoder().encode(boundary);
+      let foundIndex = -1;
       
-      // Poll for status updates
-      this._startStatusPolling(entityId, statusLeft, statusRight);
+      // Search for boundary sequence
+      for (let i = 0; i <= buffer.length - boundaryBytes.length; i++) {
+        if (buffer[i] === boundaryBytes[0]) {
+          let found = true;
+          for (let j = 1; j < boundaryBytes.length; j++) {
+            if (buffer[i+j] !== boundaryBytes[j]) {
+              found = false;
+              break;
+            }
+          }
+          if (found) {
+            foundIndex = i;
+            break;
+          }
+        }
+      }
+      
+      return foundIndex;
+    };
+    
+    // Extract JPEG from frame
+    this._extractJpegFromFrame = (frameData) => {
+      // Find the JPEG start marker (FFD8)
+      let jpegStart = -1;
+      for (let i = 0; i < frameData.length - 1; i++) {
+        if (frameData[i] === 0xFF && frameData[i+1] === 0xD8) {
+          jpegStart = i;
+          break;
+        }
+      }
+      
+      if (jpegStart === -1) return null;
+      
+      // Find the JPEG end marker (FFD9)
+      let jpegEnd = -1;
+      for (let i = frameData.length - 2; i >= 0; i--) {
+        if (frameData[i] === 0xFF && frameData[i+1] === 0xD9) {
+          jpegEnd = i + 2; // Include the marker
+          break;
+        }
+      }
+      
+      if (jpegEnd === -1) return null;
+      
+      // Create blob from JPEG data
+      return new Blob([frameData.subarray(jpegStart, jpegEnd)], { type: 'image/jpeg' });
+    };
+    
+    // Simpler alternative implementation for smaller, single-image approach
+    this._fetchSingleFrame = async (url, imgElement, loadingEl, signal) => {
+      try {
+        // Use single frame endpoint if available, otherwise use stream endpoint
+        const singleFrameUrl = url.replace('/stream', '/snapshot');
+        
+        // Add timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const response = await this._hass.fetchWithAuth(`${singleFrameUrl}?t=${timestamp}`, {
+          method: 'GET',
+          signal: signal,
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        
+        // Clean up previous blob URL
+        if (imgElement._blobUrl) {
+          URL.revokeObjectURL(imgElement._blobUrl);
+        }
+        
+        // Create and set new blob URL
+        const blobUrl = URL.createObjectURL(blob);
+        imgElement.src = blobUrl;
+        imgElement._blobUrl = blobUrl;
+        
+        imgElement.style.display = 'block';
+        loadingEl.style.display = 'none';
+        
+        // If not aborted, fetch the next frame
+        if (!signal.aborted) {
+          setTimeout(() => {
+            this._fetchSingleFrame(url, imgElement, loadingEl, signal);
+          }, 100); // 10 fps
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.log('Stream aborted');
+        } else {
+          console.error('Error fetching frame:', error);
+          loadingEl.textContent = 'Stream error. Please try again.';
+          loadingEl.style.display = 'block';
+          imgElement.style.display = 'none';
+        }
+      }
     };
     
     // Function to stop streaming
@@ -490,6 +723,18 @@ class ESP32RobotCard extends LitElement {
       if (this._statusInterval) {
         clearInterval(this._statusInterval);
         this._statusInterval = null;
+      }
+      
+      // Abort the MJPEG streaming
+      if (mjpegController) {
+        mjpegController.abort();
+        mjpegController = null;
+      }
+      
+      // Clean up blob URL
+      if (videoImg._blobUrl) {
+        URL.revokeObjectURL(videoImg._blobUrl);
+        videoImg._blobUrl = null;
       }
       
       // Send request to stop the stream on the device
