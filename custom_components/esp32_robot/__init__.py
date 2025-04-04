@@ -6,6 +6,7 @@ import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.components.http import HomeAssistantView, StaticPathConfig
+from homeassistant.components.http.auth import async_sign_path, async_validate_signed_request
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.helpers import entity_registry
 import aiohttp
@@ -14,6 +15,7 @@ from .const import DOMAIN
 from .sensor import ESP32RobotSensor
 from .frontend import async_setup_frontend
 from pathlib import Path
+from datetime import timedelta
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Register view for API endpoints
     hass.http.register_view(ESP32RobotProxyView(hass))
+    hass.http.register_view(ESP32RobotSignedUrlView(hass))
     
     # Forward to sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -67,6 +70,16 @@ class ESP32RobotProxyView(HomeAssistantView):
     
     async def get(self, request, sensor_id, path):
         """Handle GET requests to the robot."""
+        # For stream path, validate signed request if present
+        if path == "stream":
+            # Allow both auth methods: standard auth and signed URLs
+            is_valid_signed = await async_validate_signed_request(request)
+            
+            # If not a valid signed URL, fall back to standard auth
+            # Since requires_auth = True, this will already be handled by HomeAssistant
+            if not is_valid_signed and 'hass_user' not in request:
+                return aiohttp.web.Response(status=401, text="Unauthorized")
+        
         return await self._proxy_request(request, sensor_id, path, "GET")
     
     async def post(self, request, sensor_id, path):
@@ -194,4 +207,58 @@ class ESP32RobotProxyView(HomeAssistantView):
                 
         except Exception as e:
             _LOGGER.error("Unexpected error in proxy request: %s", str(e))
-            return self.json_message(f"Server error: {str(e)}", 500) 
+            return self.json_message(f"Server error: {str(e)}", 500)
+
+class ESP32RobotSignedUrlView(HomeAssistantView):
+    """View to generate signed URLs for ESP32 Robot streams."""
+    
+    url = "/api/esp32_robot/get_signed_url"
+    name = "api:esp32_robot:get_signed_url"
+    requires_auth = True  # This endpoint still requires auth to get the signed URL
+    
+    def __init__(self, hass):
+        """Initialize the signed URL view."""
+        self.hass = hass
+    
+    async def get(self, request):
+        """Handle GET requests for signed URLs."""
+        # Get parameters
+        robot_id = request.query.get("id")
+        
+        if not robot_id:
+            return self.json_message("Missing required parameter: id", 400)
+        
+        # Generate a signed URL for the stream endpoint
+        try:
+            # Check if the robot entity exists and is online
+            full_entity_id = f"sensor.{robot_id}"
+            state = self.hass.states.get(full_entity_id)
+            
+            if not state:
+                return self.json_message(f"Robot entity not found: {full_entity_id}", 404)
+                
+            if state.state != "online":
+                return self.json_message(f"Robot is offline: {full_entity_id}", 503)
+            
+            # Generate a signed URL with a short expiration (2 minutes)
+            signed_url = await async_sign_path(
+                self.hass,
+                request,
+                f"/api/esp32_robot/proxy/{robot_id}/stream",
+                timedelta(minutes=2)
+            )
+            
+            # Get IP address from entity attributes
+            ip_address = state.attributes.get('ip_address', 'unknown')
+            
+            return self.json({
+                "signed_url": signed_url,
+                "expires_in": 120,  # seconds
+                "robot_id": robot_id,
+                "ip_address": ip_address,
+                "state": state.state
+            })
+        
+        except Exception as e:
+            _LOGGER.error("Error generating signed URL: %s", str(e))
+            return self.json_message(f"Error generating signed URL: {str(e)}", 500) 
