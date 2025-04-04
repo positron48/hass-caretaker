@@ -6,31 +6,26 @@ from homeassistant.components.frontend import async_register_built_in_panel
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_frontend(hass):
-    """Set up the ESP32 Robot frontend."""
-    # Register card
-    root_path = os.path.dirname(__file__)
-    
-    # Register Lovelace card
-    await hass.components.frontend.async_register_built_in_panel(
-        "iframe",
-        "esp32_robot",
-        "ESP32 Robot",
-        "mdi:robot",
-        {"url": "/api/esp32_robot/interface"},
-        require_admin=False,
+    """Set up the ESP32 Robot frontend elements."""
+    await async_register_built_in_panel(
+        hass,
+        frontend_url_path="esp32_robot",
+        module_url="/api/esp32_robot/interface",
+        sidebar_title="ESP32 Robot",
+        sidebar_icon="mdi:robot",
+        require_admin=True
     )
     
-    # Register Lovelace resources
-    await hass.components.lovelace.async_register_resource(
-        {
-            "url": "/esp32_robot/frontend/esp32-robot-card.js",
-            "type": "module",
-        }
+    # Register Lovelace resource
+    hass.http.register_static_path(
+        "/esp32_robot/frontend/esp32-robot-card.js",
+        os.path.join(os.path.dirname(__file__), "lovelace/esp32-robot-card.js"),
+        cache_headers=False
     )
-    
+
     # Register interface HTML
     await hass.http.register_static_path(
         "/frontend_es5/esp32_robot_interface.html",
-        os.path.join(root_path, "interface.html"),
+        os.path.join(os.path.dirname(__file__), "interface.html"),
         False
     ) 
