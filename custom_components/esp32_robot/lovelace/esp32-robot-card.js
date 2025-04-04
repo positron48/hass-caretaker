@@ -293,9 +293,18 @@ class ESP32RobotCard extends LitElement {
 
     // Loading indicator
     const loadingEl = document.createElement('div');
-    loadingEl.textContent = 'Loading stream...';
+    loadingEl.textContent = 'Click Start Stream button below';
     loadingEl.style.position = 'absolute';
     loadingEl.style.color = 'var(--primary-text-color, #fff)';
+    loadingEl.style.display = 'flex';
+    loadingEl.style.alignItems = 'center';
+    loadingEl.style.justifyContent = 'center';
+    loadingEl.style.width = '100%';
+    loadingEl.style.height = '100%';
+    loadingEl.style.textAlign = 'center';
+    loadingEl.style.fontWeight = 'bold';
+    loadingEl.style.padding = '16px';
+    loadingEl.style.boxSizing = 'border-box';
     loadingEl.id = 'loading-indicator';
     videoContainer.appendChild(loadingEl);
 
@@ -449,8 +458,6 @@ class ESP32RobotCard extends LitElement {
   _initializeStreaming(entityId, videoImg, loadingEl, streamButton, statusLeft, statusRight) {
     const streamUrl = `/api/esp32_robot/proxy/${entityId}/stream`;
     let isStreaming = false;
-    let streamInterval;
-    let statusInterval;
     
     // Function to start streaming
     const startStream = () => {
@@ -459,20 +466,9 @@ class ESP32RobotCard extends LitElement {
       loadingEl.style.display = 'block';
       videoImg.style.display = 'none';
       
-      // For image elements, we need to use createObjectURL since we can't set headers
+      // For MJPEG streams, we can set the src directly since it's a continuous stream
       const timestamp = new Date().getTime();
-      this._hass.fetchWithAuth(`${streamUrl}?t=${timestamp}`)
-        .then(response => response.blob())
-        .then(blob => {
-          const url = URL.createObjectURL(blob);
-          videoImg.src = url;
-        })
-        .catch(error => {
-          console.error('Error fetching stream:', error);
-          loadingEl.textContent = 'Stream error. Please try again.';
-          isStreaming = false;
-          streamButton.textContent = 'Start Stream';
-        });
+      videoImg.src = this._hass.hassUrl(`${streamUrl}?t=${timestamp}`);
       
       videoImg.onload = () => {
         loadingEl.style.display = 'none';
@@ -491,18 +487,25 @@ class ESP32RobotCard extends LitElement {
     
     // Function to stop streaming
     this._stopStream = () => {
-      if (streamInterval) {
-        clearInterval(streamInterval);
+      if (this._statusInterval) {
+        clearInterval(this._statusInterval);
+        this._statusInterval = null;
       }
-      if (statusInterval) {
-        clearInterval(statusInterval);
-      }
+      
+      // Send request to stop the stream on the device
+      this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/stopstream`, {
+        method: 'GET',
+        cache: 'no-store',
+      }).catch(error => {
+        console.error('Error stopping stream:', error);
+      });
+      
       isStreaming = false;
       streamButton.textContent = 'Start Stream';
       videoImg.src = '';
       videoImg.style.display = 'none';
       loadingEl.style.display = 'block';
-      loadingEl.textContent = 'Stream stopped';
+      loadingEl.textContent = 'Click Start Stream button below';
     };
     
     // Initialize button click
@@ -514,8 +517,8 @@ class ESP32RobotCard extends LitElement {
       }
     });
     
-    // Start stream by default
-    startStream();
+    // Do not start stream by default, just show the placeholder
+    loadingEl.textContent = 'Click Start Stream button below';
   }
   
   _startStatusPolling(entityId, statusLeft, statusRight) {

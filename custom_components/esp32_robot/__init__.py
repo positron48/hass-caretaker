@@ -136,8 +136,36 @@ class ESP32RobotProxyView(HomeAssistantView):
                                 if method == "GET":
                                     async with session.get(url, params=params, headers=headers) as response:
                                         content_type = response.headers.get('Content-Type', 'application/json')
-                                        if 'image' in content_type or 'stream' in content_type:
-                                            # For images or streams, return raw content
+                                        _LOGGER.debug("Response content type: %s for path: %s", content_type, path)
+                                        
+                                        if 'multipart/x-mixed-replace' in content_type:
+                                            # For MJPEG streams, we need to create a streaming response
+                                            _LOGGER.debug("Handling MJPEG stream from %s", url)
+                                            
+                                            # Create a response object with the same headers
+                                            resp = aiohttp.web.StreamResponse(status=response.status)
+                                            for name, value in response.headers.items():
+                                                if name.lower() not in ('transfer-encoding',):
+                                                    resp.headers[name] = value
+                                            
+                                            # Start the response
+                                            await resp.prepare(request)
+                                            _LOGGER.debug("MJPEG stream response prepared")
+                                            
+                                            # Stream the content
+                                            try:
+                                                async for chunk in response.content.iter_any():
+                                                    await resp.write(chunk)
+                                            except Exception as e:
+                                                _LOGGER.error("Error streaming MJPEG content: %s", str(e))
+                                                return self.json_message(f"Streaming error: {str(e)}", 500)
+                                            
+                                            _LOGGER.debug("MJPEG stream completed")
+                                            # End the response
+                                            await resp.write_eof()
+                                            return resp
+                                        elif 'image' in content_type:
+                                            # For static images, return raw content
                                             data = await response.read()
                                             return aiohttp.web.Response(body=data, content_type=content_type)
                                         else:
