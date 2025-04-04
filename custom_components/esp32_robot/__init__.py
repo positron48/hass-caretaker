@@ -6,7 +6,7 @@ import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.components.http import HomeAssistantView, StaticPathConfig
-from homeassistant.components.http.auth import async_sign_path, async_validate_signed_request
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.helpers import entity_registry
 import aiohttp
@@ -62,7 +62,7 @@ class ESP32RobotProxyView(HomeAssistantView):
     
     url = "/api/esp32_robot/proxy/{sensor_id}/{path:.*}"
     name = "api:esp32_robot:proxy"
-    requires_auth = True  # Use Home Assistant's built-in auth validation
+    requires_auth = False  # We'll handle auth manually to support both methods
     
     def __init__(self, hass):
         """Initialize the proxy view."""
@@ -70,20 +70,19 @@ class ESP32RobotProxyView(HomeAssistantView):
     
     async def get(self, request, sensor_id, path):
         """Handle GET requests to the robot."""
-        # For stream path, validate signed request if present
-        if path == "stream":
-            # Allow both auth methods: standard auth and signed URLs
-            is_valid_signed = await async_validate_signed_request(request)
-            
-            # If not a valid signed URL, fall back to standard auth
-            # Since requires_auth = True, this will already be handled by HomeAssistant
-            if not is_valid_signed and 'hass_user' not in request:
-                return aiohttp.web.Response(status=401, text="Unauthorized")
+        # Check authentication - either valid auth token or valid signature
+        if not request.get("hass_user") and not request.get("auth_signature_valid", False):
+            # If the stream endpoint is accessed without proper auth, return 401
+            return aiohttp.web.Response(status=401, text="Unauthorized (invalid or expired signature)")
         
         return await self._proxy_request(request, sensor_id, path, "GET")
     
     async def post(self, request, sensor_id, path):
         """Handle POST requests to the robot."""
+        # For POST requests, we require a standard auth token (hass_user)
+        if not request.get("hass_user"):
+            return aiohttp.web.Response(status=401, text="Unauthorized")
+        
         return await self._proxy_request(request, sensor_id, path, "POST")
     
     async def _proxy_request(self, request, sensor_id, path, method):

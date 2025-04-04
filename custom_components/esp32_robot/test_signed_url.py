@@ -54,15 +54,15 @@ async def test_signed_url_flow():
                 parsed_url = urlparse(signed_url)
                 query_params = parse_qs(parsed_url.query)
                 
-                # Check if the URL contains an auth_sig parameter
+                # Check if the URL contains an authSig parameter
                 if "authSig" not in query_params:
                     _LOGGER.error("The signed URL does not contain an authSig parameter")
                     return
                 
-                _LOGGER.info("URL appears to be correctly signed")
+                _LOGGER.info("URL appears to be correctly signed with authSig parameter")
             
             # 2. Test accessing the stream with the signed URL (no auth header)
-            _LOGGER.info("Testing access to stream with signed URL (no auth)...")
+            _LOGGER.info("Testing access to stream with signed URL (no auth header)...")
             
             try:
                 # Just check if we get a valid response header - don't stream the whole content
@@ -74,7 +74,7 @@ async def test_signed_url_flow():
                     if response.status == 200:
                         content_type = response.headers.get("Content-Type", "")
                         if "multipart/x-mixed-replace" in content_type:
-                            _LOGGER.info("Successfully accessed stream with signed URL")
+                            _LOGGER.info("Successfully accessed stream with signed URL (no auth header)")
                         else:
                             _LOGGER.warning(f"Received 200 response, but content type is {content_type}")
                     else:
@@ -103,6 +103,29 @@ async def test_signed_url_flow():
                         _LOGGER.error(f"Response: {text}")
             except asyncio.TimeoutError:
                 _LOGGER.error("Request timed out, which is unexpected for auth failure")
+            
+            # 4. Test accessing the stream with a standard auth token (without signed URL)
+            _LOGGER.info("Testing access to stream with standard auth token...")
+            
+            try:
+                async with session.get(
+                    f"{base_url}/api/esp32_robot/proxy/{robot_id}/stream",
+                    headers={"Authorization": f"Bearer {ha_token}"},
+                    timeout=5
+                ) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get("Content-Type", "")
+                        if "multipart/x-mixed-replace" in content_type:
+                            _LOGGER.info("Successfully accessed stream with standard auth token")
+                        else:
+                            _LOGGER.warning(f"Received 200 response, but content type is {content_type}")
+                    else:
+                        _LOGGER.error(f"Failed to access stream with auth token: {response.status}")
+                        text = await response.text()
+                        _LOGGER.error(f"Response: {text}")
+            except asyncio.TimeoutError:
+                # For MJPEG streams, a timeout is expected since we're not consuming the full stream
+                _LOGGER.info("Request timed out as expected for MJPEG stream (with auth token)")
     
     except Exception as e:
         _LOGGER.error(f"Test failed with exception: {str(e)}")

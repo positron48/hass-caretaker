@@ -20,8 +20,20 @@ The ESP32 Robot integration implements secure video streaming using Home Assista
 2. **Signed URLs**: The integration generates time-limited signed URLs for streams, which can be used even in contexts where standard authentication headers aren't supported (like `<img>` tags).
 3. **Limited Validity**: Signed URLs expire after 2 minutes by default, requiring clients to refresh them periodically.
 4. **Proxy Protection**: All communication with your ESP32 robot goes through Home Assistant's proxy system, avoiding direct exposure of your robot's IP address to clients.
+5. **Dual Authentication**: The integration supports both standard Home Assistant authentication tokens and signed URLs, giving you flexibility in how you access streams.
 
 This security model ensures that your robot's video stream can only be accessed by authorized users, even when embedded in cards or shared within your Home Assistant dashboard.
+
+### Authentication Technical Details
+
+The integration uses Home Assistant's built-in `auth_signature_valid` mechanism to verify signed URLs. When Home Assistant receives a request with an `authSig` parameter in the URL:
+
+1. It automatically validates the signature
+2. If valid, it sets `request["auth_signature_valid"] = True`
+3. Our integration checks either for a standard authenticated user (`hass_user`) or a valid signature (`auth_signature_valid`)
+4. If neither is present, it returns a 401 Unauthorized response
+
+This approach follows Home Assistant's recommended security practices for handling authenticated streams.
 
 ## Usage
 

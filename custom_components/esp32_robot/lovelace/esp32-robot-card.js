@@ -476,12 +476,14 @@ class ESP32RobotCard extends LitElement {
             'Expires': '0'
           }
         });
+        
         if (!response.ok) {
           throw new Error(`Failed to get signed URL: ${response.status}`);
         }
         
         const data = await response.json();
         const signedUrl = data.signed_url;
+        console.log("Got signed URL with expiration: " + data.expires_in + " seconds");
         
         // For MJPEG streams, we can set the src directly since it's a continuous stream
         videoImg.src = signedUrl;
@@ -489,12 +491,30 @@ class ESP32RobotCard extends LitElement {
         videoImg.onload = () => {
           loadingEl.style.display = 'none';
           videoImg.style.display = 'block';
+          console.log("Stream loaded successfully");
         };
         
-        videoImg.onerror = () => {
+        videoImg.onerror = (error) => {
+          console.error("Stream error:", error);
           loadingEl.textContent = 'Stream error. Please try again.';
           isStreaming = false;
           streamButton.textContent = 'Start Stream';
+        };
+        
+        // Automatically refresh the signed URL before it expires
+        // Set a timer to refresh 10 seconds before expiration
+        const refreshTimer = setTimeout(() => {
+          if (isStreaming) {
+            console.log("Refreshing signed URL before expiration");
+            startStream(); // This will get a new signed URL
+          }
+        }, (data.expires_in - 10) * 1000);
+        
+        // Clear the refresh timer if stream is stopped
+        this._stopStreamCleanup = () => {
+          if (refreshTimer) {
+            clearTimeout(refreshTimer);
+          }
         };
         
         // Poll for status updates
@@ -512,6 +532,12 @@ class ESP32RobotCard extends LitElement {
       if (this._statusInterval) {
         clearInterval(this._statusInterval);
         this._statusInterval = null;
+      }
+      
+      // Run any cleanup functions
+      if (this._stopStreamCleanup) {
+        this._stopStreamCleanup();
+        this._stopStreamCleanup = null;
       }
       
       // Send request to stop the stream on the device
