@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
+import "./editor.js";
 
 class ESP32RobotCard extends LitElement {
   static get properties() {
@@ -208,7 +209,7 @@ class ESP32RobotCard extends LitElement {
 
     // Create an iframe that will load the robot control interface
     const iframe = document.createElement('iframe');
-    iframe.src = `/frontend_es5/esp32_robot_interface.html?entity_id=${entityId}`;
+    iframe.src = `/esp32_robot/interface?entity_id=${entityId}`;
     iframe.style.border = 'none';
     iframe.style.width = '100%';
     iframe.style.height = '100%';
