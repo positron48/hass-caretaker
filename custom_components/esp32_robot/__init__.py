@@ -47,23 +47,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     ])
     
-    # Register card as a Lovelace resource
-    # This is done during setup entry to make sure it's always available
-    hass.data[DOMAIN].setdefault("resources", set())
-    resource_url = "/local/esp32-robot-card.js"
-    
-    if resource_url not in hass.data[DOMAIN]["resources"]:
-        hass.data[DOMAIN]["resources"].add(resource_url)
-        
-        # Информация о том, как добавить ресурс карточки в Lovelace
-        _LOGGER.warning(
-            "ВАЖНО! Для использования ESP32 Robot Card, добавьте следующий ресурс в настройках Lovelace: "
-            "- Перейдите в Настройки -> Панель инструментов -> Ресурсы"
-            "- Нажмите '+ Добавить ресурс'"
-            "- URL: %s"
-            "- Тип ресурса: module", resource_url
-        )
-    
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

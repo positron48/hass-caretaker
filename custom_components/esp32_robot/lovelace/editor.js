@@ -110,5 +110,7 @@ export class ESP32RobotCardEditor extends LitElement {
   }
 }
 
+customElements.define("esp32-robot-card-editor", ESP32RobotCardEditor);
+
 // Карточка регистрируется только в основном файле карточки (esp32-robot-card.js)
 // Удаляем дублирующую регистрацию здесь 

@@ -1,5 +1,4 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module";
-import "./editor.js";
 
 export class ESP32RobotCard extends LitElement {
   static get properties() {
@@ -595,4 +594,14 @@ export class ESP32RobotCard extends LitElement {
       }
     });
   }
-} 
+}
+
+customElements.define("esp32-robot-card", ESP32RobotCard);
+
+// Для HACS и регистрации карточки
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "esp32-robot-card",
+  name: "ESP32 Robot Card",
+  description: "A card to monitor and control an ESP32 Robot"
+}); 
