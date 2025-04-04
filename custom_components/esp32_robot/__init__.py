@@ -58,7 +58,7 @@ class ESP32RobotProxyView(HomeAssistantView):
     
     url = "/api/esp32_robot/proxy/{sensor_id}/{path:.*}"
     name = "api:esp32_robot:proxy"
-    requires_auth = True  # Ensures Home Assistant authentication
+    requires_auth = True  # Use Home Assistant's built-in auth validation
     
     def __init__(self, hass):
         """Initialize the proxy view."""
@@ -100,7 +100,7 @@ class ESP32RobotProxyView(HomeAssistantView):
                 if method == "POST":
                     data = await request.read()
                 
-                # Copy original headers (except host)
+                # Copy original headers (except host and authorization)
                 headers = {}
                 for name, value in request.headers.items():
                     if name.lower() not in ('host', 'authorization'):
@@ -108,10 +108,8 @@ class ESP32RobotProxyView(HomeAssistantView):
                 
                 # Get query parameters
                 params = dict(request.query)
-                # Remove token if it exists (used for authentication in image requests)
-                if 'token' in params:
-                    del params['token']
                 
+                # Create a client session and make the request
                 async with aiohttp.ClientSession() as session:
                     if method == "GET":
                         async with session.get(url, params=params, headers=headers) as response:

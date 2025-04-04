@@ -459,11 +459,20 @@ class ESP32RobotCard extends LitElement {
       loadingEl.style.display = 'block';
       videoImg.style.display = 'none';
       
-      // Set a random parameter to bypass caching and add auth token
+      // For image elements, we need to use createObjectURL since we can't set headers
       const timestamp = new Date().getTime();
-      const token = this._hass.auth.data.access_token;
-      // Add the token as a query parameter
-      videoImg.src = `${streamUrl}?t=${timestamp}&token=${token}`;
+      this._hass.fetchWithAuth(`${streamUrl}?t=${timestamp}`)
+        .then(response => response.blob())
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          videoImg.src = url;
+        })
+        .catch(error => {
+          console.error('Error fetching stream:', error);
+          loadingEl.textContent = 'Stream error. Please try again.';
+          isStreaming = false;
+          streamButton.textContent = 'Start Stream';
+        });
       
       videoImg.onload = () => {
         loadingEl.style.display = 'none';
@@ -520,11 +529,7 @@ class ESP32RobotCard extends LitElement {
     // Function to update status
     const updateStatus = async () => {
       try {
-        const response = await fetch(statusUrl, {
-          headers: {
-            Authorization: `Bearer ${this._hass.auth.data.access_token}`
-          }
-        });
+        const response = await this._hass.fetchWithAuth(statusUrl);
         if (response.ok) {
           const data = await response.json();
           statusLeft.textContent = `FPS: ${data.fps || '--'}`;
@@ -614,11 +619,8 @@ class ESP32RobotCard extends LitElement {
     // Function to send control command
     this._sendControlCommand = async (url, x, y) => {
       try {
-        const response = await fetch(`${url}?x=${x}&y=${y}`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this._hass.auth.data.access_token}`
-          }
+        const response = await this._hass.fetchWithAuth(`${url}?x=${x}&y=${y}`, {
+          method: 'POST'
         });
         if (!response.ok) {
           console.error('Control error:', response.status);
