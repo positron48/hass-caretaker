@@ -10,6 +10,8 @@ class ESP32RobotCard extends LitElement {
 
   constructor() {
     super();
+    this.attachShadow({ mode: 'open' });
+    this._config = {};
   }
 
   static get styles() {
@@ -54,11 +56,17 @@ class ESP32RobotCard extends LitElement {
     `;
   }
 
+  set hass(hass) {
+    this._hass = hass;
+    this._entity = this._config.entity ? hass.states[this._config.entity] : null;
+    this._render();
+  }
+
   setConfig(config) {
     if (!config.entity) {
-      throw new Error("You need to define an entity");
+      throw new Error('You need to define an entity');
     }
-    this.config = config;
+    this._config = config;
   }
 
   static getConfigElement() {
@@ -76,83 +84,166 @@ class ESP32RobotCard extends LitElement {
     return 3;
   }
 
-  render() {
-    if (!this.config || !this.hass) {
-      return html``;
-    }
-
-    const entityId = this.config.entity;
-    const stateObj = this.hass.states[entityId];
-    
-    if (!stateObj) {
-      return html`
-        <ha-card>
-          <div class="card-container">
-            <div class="header">
-              <h2>ESP32 Robot</h2>
-            </div>
-            <div class="error">
-              Entity not found: ${entityId}
-            </div>
+  _render() {
+    if (!this._entity) {
+      this.shadowRoot.innerHTML = `
+        <ha-card header="ESP32 Robot">
+          <div class="card-content">
+            <div>Entity not found: ${this._config.entity}</div>
           </div>
         </ha-card>
       `;
+      return;
     }
 
-    const status = stateObj.state;
-    const ipAddress = stateObj.attributes.ip_address || "";
-    const fps = stateObj.attributes.fps || 0;
-    const streaming = stateObj.attributes.streaming || false;
-    
-    // Показываем ошибку только если статус онлайн и есть сообщение об ошибке
-    const lastError = status === 'online' ? (stateObj.attributes.last_error || "") : "";
-    
-    return html`
-      <ha-card>
-        <div class="card-container">
-          <div class="header">
-            <h2>${this.config.title || "ESP32 Robot"}</h2>
-            <ha-icon
-              icon="${status === 'online' ? 'mdi:robot' : 'mdi:robot-off'}"
-              style="color: ${status === 'online' ? 'var(--success-color, #4CAF50)' : 'var(--error-color, #F44336)'}"
-            ></ha-icon>
+    const isOnline = this._entity.state === 'online';
+    const statusColor = isOnline ? 'var(--success-color, #4CAF50)' : 'var(--error-color, #F44336)';
+    const status = isOnline ? 'Online' : 'Offline';
+    const ipAddress = this._entity.attributes.ip_address || '';
+    const fps = this._entity.attributes.fps !== undefined ? this._entity.attributes.fps : '';
+    const streaming = this._entity.attributes.streaming !== undefined ? this._entity.attributes.streaming : '';
+    const entityId = this._entity.entity_id.split(".")[1];
+
+    this.shadowRoot.innerHTML = `
+      <ha-card header="${this._config.title || 'ESP32 Robot'}">
+        <style>
+          .card-content {
+            padding: 16px;
+          }
+          .status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+          }
+          .status-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: ${statusColor};
+            margin-right: 8px;
+          }
+          .attributes {
+            margin-top: 16px;
+          }
+          .attribute {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 4px;
+          }
+          .control-btn {
+            --mdc-theme-primary: var(--primary-color);
+            margin-top: 16px;
+            width: 100%;
+            ${!isOnline ? 'opacity: 0.5; pointer-events: none;' : ''}
+          }
+          .error {
+            color: var(--error-color);
+            margin-top: 8px;
+          }
+        </style>
+        <div class="card-content">
+          <div class="status">
+            <div class="status-icon"></div>
+            <div>${status}</div>
           </div>
           
-          <div class="status">
-            <div class="status-row">
-              <span class="status-label">Статус:</span>
-              <span class="status-value ${status}">${status === 'online' ? 'онлайн' : 'оффлайн'}</span>
+          <div class="attributes">
+            <div class="attribute">
+              <div>IP:</div>
+              <div>${ipAddress}</div>
             </div>
-            
-            ${status === 'online' ? html`
-              <div class="status-row">
-                <span class="status-label">IP адрес:</span>
-                <span class="status-value">${ipAddress}</span>
+            ${isOnline && fps ? `
+              <div class="attribute">
+                <div>FPS:</div>
+                <div>${fps}</div>
               </div>
-              
-              <div class="status-row">
-                <span class="status-label">Стриминг:</span>
-                <span class="status-value">${streaming ? 'активен' : 'не активен'}</span>
-              </div>
-              
-              ${streaming ? html`
-                <div class="status-row">
-                  <span class="status-label">FPS:</span>
-                  <span class="status-value">${fps}</span>
-                </div>
-              ` : ''}
             ` : ''}
-            
-            ${lastError ? html`
-              <div class="status-row">
-                <span class="status-label">Ошибка:</span>
-                <span class="status-value" style="color: var(--error-color, #F44336)">${lastError}</span>
+            ${isOnline && streaming !== undefined ? `
+              <div class="attribute">
+                <div>Streaming:</div>
+                <div>${streaming ? 'Yes' : 'No'}</div>
+              </div>
+            ` : ''}
+            ${isOnline && this._entity.attributes.last_error ? `
+              <div class="error">
+                ${this._entity.attributes.last_error}
               </div>
             ` : ''}
           </div>
+          
+          <mwc-button 
+            class="control-btn" 
+            raised 
+            ?disabled="${!isOnline}" 
+            @click="${this._openControlInterface}"
+          >
+            Control Interface
+          </mwc-button>
         </div>
       </ha-card>
     `;
+  }
+
+  _openControlInterface() {
+    if (!this._entity || this._entity.state !== 'online') {
+      return;
+    }
+
+    const entityId = this._entity.entity_id.split(".")[1];
+    const title = this._config.title || 'ESP32 Robot';
+
+    // Create a modal dialog
+    const dialog = document.createElement('dialog');
+    dialog.id = `esp32-robot-dialog-${entityId}`;
+    dialog.style.position = 'fixed';
+    dialog.style.top = '0';
+    dialog.style.left = '0';
+    dialog.style.width = '100%';
+    dialog.style.height = '100%';
+    dialog.style.padding = '0';
+    dialog.style.border = 'none';
+    dialog.style.zIndex = '9999';
+    dialog.style.backgroundColor = '#000';
+    dialog.style.overflow = 'hidden';
+
+    // Create an iframe that will load the robot control interface
+    const iframe = document.createElement('iframe');
+    iframe.src = `/frontend_es5/esp32_robot_interface.html?entity_id=${entityId}`;
+    iframe.style.border = 'none';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.position = 'absolute';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+
+    // Create a close button
+    const closeButton = document.createElement('div');
+    closeButton.style.position = 'absolute';
+    closeButton.style.top = '16px';
+    closeButton.style.right = '16px';
+    closeButton.style.zIndex = '10000';
+    closeButton.style.background = 'rgba(0, 0, 0, 0.5)';
+    closeButton.style.color = 'white';
+    closeButton.style.padding = '8px 12px';
+    closeButton.style.borderRadius = '4px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.fontWeight = 'bold';
+    closeButton.style.fontSize = '16px';
+    closeButton.textContent = 'Close';
+    closeButton.addEventListener('click', () => {
+      dialog.close();
+      document.body.removeChild(dialog);
+    });
+
+    // Add elements to the dialog
+    dialog.appendChild(iframe);
+    dialog.appendChild(closeButton);
+
+    // Add dialog to the document
+    document.body.appendChild(dialog);
+    
+    // Show the dialog
+    dialog.showModal();
   }
 }
 
@@ -163,5 +254,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "esp32-robot-card",
   name: "ESP32 Robot Card",
-  description: "A card for displaying the ESP32 Robot status",
+  description: "A card to monitor and control an ESP32 Robot",
 }); 

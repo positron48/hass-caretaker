@@ -2,6 +2,9 @@
 
 DOMAIN = "esp32_robot"
 
+# Configuration constants
 CONF_IP_ADDRESS = "ip_address"
-CONF_SCAN_INTERVAL = "scan_interval"
-DEFAULT_SCAN_INTERVAL = 30 
+CONF_UPDATE_INTERVAL = "update_interval"
+
+# Default values
+DEFAULT_UPDATE_INTERVAL = 30  # seconds 

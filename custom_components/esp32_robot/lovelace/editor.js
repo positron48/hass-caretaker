@@ -10,7 +10,7 @@ class ESP32RobotCardEditor extends LitElement {
   }
 
   setConfig(config) {
-    this._config = { ...config };
+    this._config = config || {};
   }
 
   firstUpdated() {
@@ -40,10 +40,14 @@ class ESP32RobotCardEditor extends LitElement {
     
     if (!configValue) return;
     
-    this._config = {
-      ...this._config,
-      [configValue]: value
-    };
+    if (value === '') {
+      delete this._config[configValue];
+    } else {
+      this._config = {
+        ...this._config,
+        [configValue]: value
+      };
+    }
 
     // Отправляем событие об изменении конфигурации
     const configChangeEvent = new CustomEvent("config-changed", {
@@ -55,7 +59,7 @@ class ESP32RobotCardEditor extends LitElement {
   }
 
   render() {
-    if (!this._config || !this.hass) {
+    if (!this.hass) {
       return html``;
     }
 
