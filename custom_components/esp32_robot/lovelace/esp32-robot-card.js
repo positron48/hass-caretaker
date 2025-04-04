@@ -469,11 +469,52 @@ class ESP32RobotCard extends LitElement {
       videoImg.style.display = 'none';
       
       try {
-        // Make sure the connection is ready
-        await this._ensureConnectionReady();
+        // Get a signed URL using the simple promise-based API
+        const signedUrl = await this._getSignedStreamUrl(entityId);
+        console.log("Got signed URL for stream");
         
-        // Get a signed URL using the WebSocket API
-        await this._getSignedUrlAndStartStream(entityId, videoImg, loadingEl, signedUrlRefreshTimer);
+        // Set up the video stream with the signed URL
+        videoImg.src = this._hass.hassUrl(signedUrl);
+        
+        videoImg.onload = () => {
+          console.log("Stream loaded successfully");
+          loadingEl.style.display = 'none';
+          videoImg.style.display = 'block';
+        };
+        
+        videoImg.onerror = (error) => {
+          console.error("Stream error:", error);
+          loadingEl.textContent = 'Stream error. Please try again.';
+          this._isStreaming = false;
+          streamButton.textContent = 'Start Stream';
+        };
+        
+        // Set up automatic URL refresh before expiration (refresh 10 seconds early)
+        if (signedUrlRefreshTimer) {
+          clearTimeout(signedUrlRefreshTimer);
+        }
+        
+        signedUrlRefreshTimer = setTimeout(async () => {
+          if (this._isStreaming) {
+            console.log("Refreshing signed URL before expiration");
+            try {
+              const newSignedUrl = await this._getSignedStreamUrl(entityId);
+              if (this._isStreaming) {
+                videoImg.src = this._hass.hassUrl(newSignedUrl);
+                
+                // Schedule next refresh
+                signedUrlRefreshTimer = setTimeout(async () => {
+                  if (this._isStreaming) {
+                    console.log("Refreshing signed URL again");
+                    startStream(); // Reuse the start function to refresh
+                  }
+                }, 50000); // Refresh 10 seconds before the 60-second expiration
+              }
+            } catch (error) {
+              console.error("Error refreshing signed URL:", error);
+            }
+          }
+        }, 50000); // Refresh 10 seconds before the 60-second expiration
         
         // Poll for status updates
         this._startStatusPolling(entityId, statusLeft, statusRight);
@@ -525,153 +566,30 @@ class ESP32RobotCard extends LitElement {
     
     // Do not start stream by default, just show the placeholder
     loadingEl.textContent = 'Click Start Stream button below';
-    
-    // Helper method to get signed URL using WebSocket API and set up automatic refreshing
-    this._getSignedUrlAndStartStream = async (entityId, videoImg, loadingEl, signedUrlRefreshTimer) => {
-      try {
-        // Make sure the connection is ready
-        await this._ensureConnectionReady();
-        
-        // Create a WebSocket message to get a signed path
-        const msgId = Math.floor(Math.random() * 10000);
-        const message = {
-          id: msgId,
-          type: "auth/sign_path",
-          path: `/api/esp32_robot/proxy/${entityId}/stream`,
-          expires: 110 // seconds (slightly less than 2 minutes)
-        };
-        
-        console.log("Sending WebSocket message for signed URL:", message);
-        
-        // Send the WebSocket message
-        const signedUrlPromise = new Promise((resolve, reject) => {
-          // Set up a one-time event handler for this specific message ID
-          const handleMessage = (event) => {
-            try {
-              const response = JSON.parse(event.data);
-              console.log("Received WebSocket response:", response);
-              
-              // Check if this is the response to our request
-              if (response.id === msgId) {
-                console.log("Message ID matched, processing response");
-                // Remove the event listener
-                this._hass.connection.removeEventListener('message', handleMessage);
-                
-                if (response.success) {
-                  console.log("Success, got path:", response.result.path);
-                  resolve(response.result.path);
-                } else {
-                  console.log("Error in response:", response.error);
-                  reject(new Error(`Failed to get signed URL: ${response.error?.message || 'Unknown error'}`));
-                }
-              }
-            } catch (error) {
-              console.error("Error parsing WebSocket response:", error, event.data);
-            }
-          };
-          
-          // Check if connection exists
-          if (!this._hass.connection) {
-            const errorMsg = "Home Assistant WebSocket connection not available";
-            console.error(errorMsg);
-            reject(new Error(errorMsg));
-            return;
-          }
-          
-          // Add the event listener
-          this._hass.connection.addEventListener('message', handleMessage);
-          
-          // Send the WebSocket message
-          try {
-            this._hass.connection.sendMessage(message);
-            console.log("WebSocket message sent successfully");
-          } catch (error) {
-            console.error("Error sending WebSocket message:", error);
-            this._hass.connection.removeEventListener('message', handleMessage);
-            reject(error);
-          }
-          
-          // Set a timeout to prevent hanging if no response
-          setTimeout(() => {
-            console.log("Timeout waiting for signed URL response");
-            this._hass.connection.removeEventListener('message', handleMessage);
-            reject(new Error('Timeout getting signed URL'));
-          }, 10000);
-        });
-        
-        // Get the signed URL
-        const signedUrl = await signedUrlPromise;
-        console.log("Received signed URL:", signedUrl);
-        
-        // Set up the video stream with the signed URL
-        videoImg.src = this._hass.hassUrl(signedUrl);
-        
-        videoImg.onload = () => {
-          console.log("Stream loaded successfully");
-          loadingEl.style.display = 'none';
-          videoImg.style.display = 'block';
-        };
-        
-        videoImg.onerror = (error) => {
-          console.error("Stream error:", error);
-          loadingEl.textContent = 'Stream error. Please try again.';
-          this._isStreaming = false;
-          streamButton.textContent = 'Start Stream';
-        };
-        
-        // Set up automatic URL refresh before expiration (refresh 10 seconds early)
-        if (signedUrlRefreshTimer) {
-          clearTimeout(signedUrlRefreshTimer);
-        }
-        
-        signedUrlRefreshTimer = setTimeout(() => {
-          if (this._isStreaming) {
-            console.log("Refreshing signed URL before expiration");
-            this._refreshSignedUrl(entityId, videoImg, loadingEl, signedUrlRefreshTimer).catch(error => {
-              console.error("Error refreshing signed URL:", error);
-            });
-          }
-        }, (message.expires - 10) * 1000);
-        
-      } catch (error) {
-        console.error("Error getting signed URL:", error);
-        throw error;
-      }
-    };
   }
   
-  // Make sure the WebSocket connection is ready
-  _ensureConnectionReady() {
-    return new Promise((resolve, reject) => {
-      if (!this._hass || !this._hass.connection) {
-        reject(new Error("Home Assistant WebSocket connection not available"));
-        return;
+  // Simple promise-based function to get a signed URL
+  async _getSignedStreamUrl(robotId, expires = 60) {
+    const path = `/api/esp32_robot/proxy/${robotId}/stream`;
+    
+    try {
+      const result = await this._hass.connection.sendMessagePromise({
+        type: "auth/sign_path",
+        path,
+        expires,
+      });
+      
+      console.log("Signed URL response:", result);
+      
+      if (result?.result?.path) {
+        return result.result.path;  // Подписанный путь с ?authSig=...
+      } else {
+        throw new Error("Failed to get signed path");
       }
-      
-      // Check if the connection is ready
-      if (this._hass.connection.haConnection && this._hass.connection.haConnection.connected) {
-        resolve();
-        return;
-      }
-      
-      console.log("Waiting for WebSocket connection to be ready...");
-      
-      // Set up a listener for when the connection is ready
-      const readyHandler = () => {
-        console.log("WebSocket connection is now ready");
-        this._hass.connection.removeEventListener("ready", readyHandler);
-        resolve();
-      };
-      
-      // Listen for the ready event
-      this._hass.connection.addEventListener("ready", readyHandler);
-      
-      // Set a timeout in case connection never becomes ready
-      setTimeout(() => {
-        this._hass.connection.removeEventListener("ready", readyHandler);
-        reject(new Error("Timeout waiting for WebSocket connection to be ready"));
-      }, 10000);
-    });
+    } catch (error) {
+      console.error("Error getting signed URL:", error);
+      throw error;
+    }
   }
   
   _startStatusPolling(entityId, statusLeft, statusRight) {
@@ -840,119 +758,6 @@ class ESP32RobotCard extends LitElement {
       }
     });
   }
-
-  // Separate method for refreshing to avoid recursion issues
-  _refreshSignedUrl = async (entityId, videoImg, loadingEl, signedUrlRefreshTimer) => {
-    try {
-      // Make sure the connection is ready
-      await this._ensureConnectionReady();
-      
-      // Create a WebSocket message to get a signed path
-      const msgId = Math.floor(Math.random() * 10000);
-      const message = {
-        id: msgId,
-        type: "auth/sign_path",
-        path: `/api/esp32_robot/proxy/${entityId}/stream`,
-        expires: 110 // seconds (slightly less than 2 minutes)
-      };
-      
-      console.log("Sending refresh WebSocket message for signed URL:", message);
-      
-      // Send the WebSocket message
-      const signedUrlPromise = new Promise((resolve, reject) => {
-        // Set up a one-time event handler for this specific message ID
-        const handleMessage = (event) => {
-          try {
-            const response = JSON.parse(event.data);
-            console.log("Received refresh WebSocket response:", response);
-            
-            // Check if this is the response to our request
-            if (response.id === msgId) {
-              console.log("Refresh message ID matched, processing response");
-              // Remove the event listener
-              this._hass.connection.removeEventListener('message', handleMessage);
-              
-              if (response.success) {
-                console.log("Refresh success, got path:", response.result.path);
-                resolve(response.result.path);
-              } else {
-                console.log("Error in refresh response:", response.error);
-                reject(new Error(`Failed to get signed URL: ${response.error?.message || 'Unknown error'}`));
-              }
-            }
-          } catch (error) {
-            console.error("Error parsing refresh WebSocket response:", error, event.data);
-          }
-        };
-        
-        // Check if connection exists
-        if (!this._hass.connection) {
-          const errorMsg = "Home Assistant WebSocket connection not available";
-          console.error(errorMsg);
-          reject(new Error(errorMsg));
-          return;
-        }
-        
-        // Add the event listener
-        this._hass.connection.addEventListener('message', handleMessage);
-        
-        // Send the WebSocket message
-        try {
-          this._hass.connection.sendMessage(message);
-          console.log("Refresh WebSocket message sent successfully");
-        } catch (error) {
-          console.error("Error sending refresh WebSocket message:", error);
-          this._hass.connection.removeEventListener('message', handleMessage);
-          reject(error);
-        }
-        
-        // Set a timeout to prevent hanging if no response
-        setTimeout(() => {
-          console.log("Timeout waiting for refresh signed URL response");
-          this._hass.connection.removeEventListener('message', handleMessage);
-          reject(new Error('Timeout getting refresh signed URL'));
-        }, 10000);
-      });
-      
-      // Get the signed URL
-      const signedUrl = await signedUrlPromise;
-      console.log("Received refresh signed URL:", signedUrl);
-      
-      // Update the video stream with the new signed URL
-      // Only update if we're still streaming to avoid race conditions
-      if (this._isStreaming) {
-        console.log("Updating stream with new signed URL");
-        videoImg.src = this._hass.hassUrl(signedUrl);
-        
-        // Set up the next refresh
-        if (signedUrlRefreshTimer) {
-          clearTimeout(signedUrlRefreshTimer);
-        }
-        
-        signedUrlRefreshTimer = setTimeout(() => {
-          if (this._isStreaming) {
-            console.log("Refreshing signed URL before expiration");
-            this._refreshSignedUrl(entityId, videoImg, loadingEl, signedUrlRefreshTimer).catch(error => {
-              console.error("Error refreshing signed URL:", error);
-            });
-          }
-        }, (message.expires - 10) * 1000);
-      }
-    } catch (error) {
-      console.error("Error refreshing signed URL:", error);
-      // If refresh fails but we're still streaming, try again after a delay
-      if (this._isStreaming) {
-        console.log("Retrying to refresh signed URL in 5 seconds...");
-        setTimeout(() => {
-          if (this._isStreaming) {
-            this._refreshSignedUrl(entityId, videoImg, loadingEl, signedUrlRefreshTimer).catch(error => {
-              console.error("Retry error refreshing signed URL:", error);
-            });
-          }
-        }, 5000);
-      }
-    }
-  };
 }
 
 customElements.define("esp32-robot-card", ESP32RobotCard);
