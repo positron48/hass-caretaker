@@ -11,6 +11,7 @@ import aiohttp
 import async_timeout
 from .const import DOMAIN
 from .sensor import ESP32RobotSensor
+from .frontend import async_setup_frontend
 
 _LOGGER = logging.getLogger(__name__)
 
