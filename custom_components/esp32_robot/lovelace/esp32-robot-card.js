@@ -210,8 +210,10 @@ class ESP32RobotCard extends LitElement {
     dialog.style.position = 'fixed';
     dialog.style.top = '0';
     dialog.style.left = '0';
-    dialog.style.width = '100%';
-    dialog.style.height = '100%';
+    dialog.style.width = '100vw'; // Use viewport width to ensure full width
+    dialog.style.height = '100vh'; // Use viewport height to ensure full height
+    dialog.style.maxWidth = '100vw'; // Prevent default max-width restrictions
+    dialog.style.maxHeight = '100vh'; // Prevent default max-height restrictions
     dialog.style.padding = '0';
     dialog.style.margin = '0';
     dialog.style.border = 'none';
@@ -221,6 +223,7 @@ class ESP32RobotCard extends LitElement {
     dialog.style.overflow = 'hidden'; // Prevent scrolling
     dialog.style.display = 'flex';
     dialog.style.flexDirection = 'column';
+    dialog.style.boxSizing = 'border-box'; // Ensure padding doesn't affect size
 
     // Container with overlay structure like in original design
     const container = document.createElement('div');
@@ -241,7 +244,7 @@ class ESP32RobotCard extends LitElement {
     
     // Loading indicator
     const loadingEl = document.createElement('div');
-    loadingEl.textContent = 'Click Start Stream button below';
+    loadingEl.textContent = 'Click Start Stream button';
     loadingEl.style.position = 'absolute';
     loadingEl.style.color = 'var(--primary-text-color, #fff)';
     loadingEl.style.display = 'flex';
@@ -309,6 +312,27 @@ class ESP32RobotCard extends LitElement {
     streamToggle.id = 'stream-button';
     controlsTop.appendChild(streamToggle);
     
+    // Settings toggle button
+    const settingsToggle = document.createElement('button');
+    settingsToggle.className = 'button icon-button';
+    settingsToggle.title = 'Settings';
+    settingsToggle.style.padding = '10px';
+    settingsToggle.style.minWidth = '44px';
+    settingsToggle.style.minHeight = '44px';
+    settingsToggle.style.border = 'none';
+    settingsToggle.style.borderRadius = '6px';
+    settingsToggle.style.cursor = 'pointer';
+    settingsToggle.style.fontSize = '14px';
+    settingsToggle.style.background = 'rgba(255, 255, 255, 0.1)';
+    settingsToggle.style.color = 'white';
+    settingsToggle.style.transition = 'all 0.3s';
+    settingsToggle.style.display = 'flex';
+    settingsToggle.style.alignItems = 'center';
+    settingsToggle.style.justifyContent = 'center';
+    settingsToggle.innerHTML = '<span style="font-size: 20px;">⚙</span>';
+    settingsToggle.id = 'settings-toggle';
+    controlsTop.appendChild(settingsToggle);
+    
     // Close button in top-right corner
     const closeButton = document.createElement('button');
     closeButton.className = 'button icon-button';
@@ -363,6 +387,211 @@ class ESP32RobotCard extends LitElement {
     fullscreenButton.style.alignItems = 'center';
     fullscreenButton.style.justifyContent = 'center';
     fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+    
+    // Settings panel
+    const settingsPanel = document.createElement('div');
+    settingsPanel.style.position = 'fixed';
+    settingsPanel.style.top = '0';
+    settingsPanel.style.left = '-320px'; // Start off-screen
+    settingsPanel.style.width = '320px';
+    settingsPanel.style.height = '100%';
+    settingsPanel.style.background = 'rgba(0, 0, 0, 0.85)';
+    settingsPanel.style.backdropFilter = 'blur(10px)';
+    settingsPanel.style.zIndex = '1000';
+    settingsPanel.style.transition = 'left 0.3s ease';
+    settingsPanel.style.padding = '20px';
+    settingsPanel.style.overflowY = 'auto';
+    settingsPanel.style.boxShadow = '5px 0 15px rgba(0, 0, 0, 0.5)';
+    settingsPanel.style.boxSizing = 'border-box';
+    settingsPanel.id = 'settings-panel';
+
+    // Settings close button
+    const settingsClose = document.createElement('div');
+    settingsClose.innerHTML = '&times;';
+    settingsClose.style.position = 'absolute';
+    settingsClose.style.top = '15px';
+    settingsClose.style.right = '15px';
+    settingsClose.style.fontSize = '24px';
+    settingsClose.style.cursor = 'pointer';
+    settingsClose.style.color = '#fff';
+    settingsClose.style.opacity = '0.7';
+    settingsClose.id = 'settings-close';
+    settingsClose.addEventListener('mouseenter', () => {
+      settingsClose.style.opacity = '1';
+    });
+    settingsClose.addEventListener('mouseleave', () => {
+      settingsClose.style.opacity = '0.7';
+    });
+    settingsPanel.appendChild(settingsClose);
+
+    // Settings title
+    const settingsTitle = document.createElement('div');
+    settingsTitle.textContent = 'Settings';
+    settingsTitle.style.fontSize = '18px';
+    settingsTitle.style.marginBottom = '20px';
+    settingsTitle.style.fontWeight = 'bold';
+    settingsTitle.style.borderBottom = '1px solid rgba(255, 255, 255, 0.2)';
+    settingsTitle.style.paddingBottom = '10px';
+    settingsPanel.appendChild(settingsTitle);
+
+    // Resolution select
+    const resolutionSection = document.createElement('div');
+    resolutionSection.style.marginBottom = '25px';
+    
+    const resolutionSelect = document.createElement('select');
+    resolutionSelect.id = 'resolution-select';
+    resolutionSelect.style.background = 'rgba(255, 255, 255, 0.1)';
+    resolutionSelect.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+    resolutionSelect.style.color = 'white';
+    resolutionSelect.style.padding = '6px 10px';
+    resolutionSelect.style.borderRadius = '4px';
+    resolutionSelect.style.width = '100%';
+    
+    // Resolution options
+    const resolutions = [
+      { value: 'QQVGA', text: 'QQVGA (160x120)' },
+      { value: 'QCIF', text: 'QCIF (176x144)' },
+      { value: 'HQVGA', text: 'HQVGA (240x176)' },
+      { value: '240X240', text: '240X240 (240x240)' },
+      { value: 'QVGA', text: 'QVGA (320x240)' },
+      { value: 'CIF', text: 'CIF (400x296)' },
+      { value: 'HVGA', text: 'HVGA (480x320)' },
+      { value: 'VGA', text: 'VGA (640x480)' },
+      { value: 'SVGA', text: 'SVGA (800x600)' },
+      { value: 'XGA', text: 'XGA (1024x768)' },
+      { value: 'HD', text: 'HD (1280x720)' },
+      { value: 'SXGA', text: 'SXGA (1280x1024)' },
+      { value: 'UXGA', text: 'UXGA (1600x1200)' }
+    ];
+    
+    resolutions.forEach(res => {
+      const option = document.createElement('option');
+      option.value = res.value;
+      option.textContent = res.text;
+      resolutionSelect.appendChild(option);
+    });
+    
+    resolutionSelect.value = 'VGA'; // Default value
+    resolutionSection.appendChild(resolutionSelect);
+    settingsPanel.appendChild(resolutionSection);
+
+    // Quality slider section
+    const qualitySection = document.createElement('div');
+    qualitySection.style.marginBottom = '25px';
+    
+    const qualitySliderContainer = document.createElement('div');
+    qualitySliderContainer.style.width = '100%';
+    qualitySliderContainer.style.margin = '10px 0';
+    
+    const qualitySlider = document.createElement('input');
+    qualitySlider.type = 'range';
+    qualitySlider.min = '8';
+    qualitySlider.max = '64';
+    qualitySlider.value = '12';
+    qualitySlider.style.width = '100%';
+    qualitySlider.style.WebkitAppearance = 'none';
+    qualitySlider.style.height = '6px';
+    qualitySlider.style.borderRadius = '3px';
+    qualitySlider.style.background = 'rgba(255, 255, 255, 0.2)';
+    qualitySlider.style.outline = 'none';
+    qualitySlider.id = 'quality-slider';
+    
+    // Thumb styling for WebKit
+    const thumbStyle = document.createElement('style');
+    thumbStyle.textContent = `
+      #quality-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--primary-color, #4CAF50);
+        cursor: pointer;
+      }
+      #quality-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--primary-color, #4CAF50);
+        cursor: pointer;
+        border: none;
+      }
+      #led-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--primary-color, #4CAF50);
+        cursor: pointer;
+      }
+      #led-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--primary-color, #4CAF50);
+        cursor: pointer;
+        border: none;
+      }
+    `;
+    document.head.appendChild(thumbStyle);
+    
+    const qualityValue = document.createElement('div');
+    qualityValue.textContent = '12 (Higher quality)';
+    qualityValue.style.textAlign = 'center';
+    qualityValue.style.marginTop = '5px';
+    qualityValue.style.fontSize = '12px';
+    qualityValue.style.opacity = '0.7';
+    qualityValue.id = 'quality-value';
+    
+    qualitySliderContainer.appendChild(qualitySlider);
+    qualitySliderContainer.appendChild(qualityValue);
+    qualitySection.appendChild(qualitySliderContainer);
+    settingsPanel.appendChild(qualitySection);
+
+    // LED control section
+    const ledSection = document.createElement('div');
+    ledSection.style.marginBottom = '25px';
+    
+    const ledSliderContainer = document.createElement('div');
+    ledSliderContainer.style.width = '100%';
+    ledSliderContainer.style.margin = '10px 0';
+    
+    const ledSlider = document.createElement('input');
+    ledSlider.type = 'range';
+    ledSlider.min = '0';
+    ledSlider.max = '100';
+    ledSlider.value = '0';
+    ledSlider.style.width = '100%';
+    ledSlider.style.WebkitAppearance = 'none';
+    ledSlider.style.height = '6px';
+    ledSlider.style.borderRadius = '3px';
+    ledSlider.style.background = 'rgba(255, 255, 255, 0.2)';
+    ledSlider.style.outline = 'none';
+    ledSlider.id = 'led-slider';
+    
+    const ledValue = document.createElement('div');
+    ledValue.textContent = 'LED: Off';
+    ledValue.style.textAlign = 'center';
+    ledValue.style.marginTop = '5px';
+    ledValue.style.fontSize = '12px';
+    ledValue.style.opacity = '0.7';
+    ledValue.id = 'led-value';
+    
+    ledSliderContainer.appendChild(ledSlider);
+    ledSliderContainer.appendChild(ledValue);
+    ledSection.appendChild(ledSliderContainer);
+    settingsPanel.appendChild(ledSection);
+
+    // Settings overlay (for closing when clicking outside)
+    const settingsOverlay = document.createElement('div');
+    settingsOverlay.style.position = 'fixed';
+    settingsOverlay.style.top = '0';
+    settingsOverlay.style.left = '0';
+    settingsOverlay.style.right = '0';
+    settingsOverlay.style.bottom = '0';
+    settingsOverlay.style.background = 'rgba(0, 0, 0, 0.5)';
+    settingsOverlay.style.zIndex = '999';
+    settingsOverlay.style.display = 'none';
+    settingsOverlay.id = 'settings-overlay';
     
     // Right controls section (joystick)
     const controlsRight = document.createElement('div');
@@ -428,6 +657,8 @@ class ESP32RobotCard extends LitElement {
     
     container.appendChild(videoContainer);
     container.appendChild(controlsOverlay);
+    container.appendChild(settingsPanel);
+    container.appendChild(settingsOverlay);
     
     // Add container to the dialog
     dialog.appendChild(container);
@@ -436,10 +667,52 @@ class ESP32RobotCard extends LitElement {
     document.body.appendChild(dialog);
     dialog.showModal();
     
+    // Initialize settings panel toggle behavior
+    settingsToggle.addEventListener('click', () => {
+      settingsPanel.style.left = settingsPanel.style.left === '0px' ? '-320px' : '0px';
+      settingsOverlay.style.display = settingsPanel.style.left === '0px' ? 'block' : 'none';
+    });
+    
+    settingsClose.addEventListener('click', () => {
+      settingsPanel.style.left = '-320px';
+      settingsOverlay.style.display = 'none';
+    });
+    
+    settingsOverlay.addEventListener('click', () => {
+      settingsPanel.style.left = '-320px';
+      settingsOverlay.style.display = 'none';
+    });
+
+    // Add event listeners for quality slider
+    qualitySlider.addEventListener('input', function() {
+      const value = this.value;
+      qualityValue.textContent = value + (value < 30 ? " (Higher quality)" : " (Lower quality)");
+    });
+
+    // Add event listeners for quality and resolution settings
+    qualitySlider.addEventListener('change', () => {
+      this._sendQualitySettings(entityId, resolutionSelect.value, qualitySlider.value);
+    });
+
+    resolutionSelect.addEventListener('change', () => {
+      this._sendQualitySettings(entityId, resolutionSelect.value, qualitySlider.value);
+    });
+
+    // Add event listeners for LED slider
+    ledSlider.addEventListener('input', function() {
+      const value = parseInt(this.value);
+      ledValue.textContent = value === 0 ? "LED: Off" : `LED: ${value}%`;
+    });
+
+    ledSlider.addEventListener('change', () => {
+      this._sendLedSetting(entityId, ledSlider.value);
+    });
+    
     // Initialize functionality
     this._initializeStreaming(entityId, videoImg, loadingEl, streamToggle, fpsStatus);
     this._initializeJoystick(entityId, joystickContainer, joystickHandle);
     this._initializeFullscreen(fullscreenButton, dialog);
+    this._initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue);
   }
   
   _initializeStreaming(entityId, videoImg, loadingEl, streamButton, fpsStatus) {
@@ -784,6 +1057,70 @@ class ESP32RobotCard extends LitElement {
           console.error('Error attempting to enable fullscreen:', err);
         });
       }
+    });
+  }
+
+  // Add new method to initialize camera settings
+  _initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue) {
+    // Get current camera settings
+    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/camera/settings`, {
+      method: 'GET',
+      cache: 'no-store',
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Update resolution select
+      if (data.resolution) {
+        const option = Array.from(resolutionSelect.options).find(opt => opt.value === data.resolution);
+        if (option) {
+          resolutionSelect.value = data.resolution;
+        }
+      }
+      
+      // Update quality slider
+      if (data.quality) {
+        qualitySlider.value = data.quality;
+        qualityValue.textContent = data.quality + 
+          (data.quality < 30 ? " (Higher quality)" : " (Lower quality)");
+      }
+      
+      // Set initial LED value
+      if (data.led_brightness !== undefined) {
+        const brightness = parseInt(data.led_brightness);
+        ledSlider.value = brightness;
+        ledValue.textContent = brightness === 0 ? "LED: Off" : `LED: ${brightness}%`;
+      }
+    })
+    .catch(error => {
+      console.error('Failed to get camera settings:', error);
+    });
+  }
+
+  // Add method to send quality settings
+  _sendQualitySettings(entityId, resolution, quality) {
+    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/quality?resolution=${resolution}&quality=${quality}`, {
+      method: 'GET',
+      cache: 'no-store',
+    })
+    .then(response => {
+      console.log(`Quality updated: ${resolution}, compression: ${quality}`);
+    })
+    .catch(error => {
+      console.error('Failed to change quality:', error);
+    });
+  }
+
+  // Add method to send LED settings
+  _sendLedSetting(entityId, brightness) {
+    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/led?brightness=${brightness}`, {
+      method: 'GET',
+      cache: 'no-store',
+    })
+    .then(response => {
+      console.log(`LED brightness set to ${brightness}%`);
+    })
+    .catch(error => {
+      console.error('Failed to control LED:', error);
     });
   }
 }
