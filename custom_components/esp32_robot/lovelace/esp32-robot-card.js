@@ -137,6 +137,18 @@ class ESP32RobotCard extends LitElement {
         padding: 0 16px;
         margin-left: 8px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        --mdc-button-horizontal-padding: 0;
+        --mdc-button-outline-width: 0;
+        --mdc-button-height: 36px;
+        --mdc-button-disabled-fill-color: var(--disabled-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .control-btn::before,
+      .control-btn::after {
+        display: none !important;
       }
       
       .control-btn:hover {
@@ -246,8 +258,9 @@ class ESP32RobotCard extends LitElement {
             ?disabled="${!isOnline}" 
             @click="${this._openControlInterface}"
             style="--mdc-theme-primary: ${isOnline ? 'var(--primary-color)' : 'var(--disabled-color)'}"
+            dense
           >
-            Control
+            CONTROL
           </mwc-button>
         </div>
         
@@ -1168,7 +1181,7 @@ class ESP32RobotCard extends LitElement {
   
   _initializeFullscreen(fullscreenButton, dialog) {
     fullscreenButton.addEventListener('click', () => {
-      // Нам нужен полноэкранный режим браузера, а не диалога
+      // Запрашиваем полноэкранный режим для ДИАЛОГА, а не всего документа
       // Проверяем, находимся ли мы в полноэкранном режиме
       const isFullScreen = document.fullscreenElement || 
                            document.webkitFullscreenElement || 
@@ -1176,15 +1189,25 @@ class ESP32RobotCard extends LitElement {
                            document.msFullscreenElement;
       
       if (!isFullScreen) {
-        // Запрашиваем полноэкранный режим для всего документа (как F11)
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen();
-        } else if (document.documentElement.mozRequestFullScreen) { // Firefox
-          document.documentElement.mozRequestFullScreen();
-        } else if (document.documentElement.webkitRequestFullscreen) { // Chrome, Safari и Opera
-          document.documentElement.webkitRequestFullscreen();
-        } else if (document.documentElement.msRequestFullscreen) { // IE/Edge
-          document.documentElement.msRequestFullscreen();
+        // Запрашиваем полноэкранный режим для диалога (не для documentElement)
+        if (dialog.requestFullscreen) {
+          dialog.requestFullscreen()
+            .then(() => {
+              console.log('Dialog is now fullscreen');
+              // Обеспечиваем видимость и фокус диалога
+              dialog.style.display = 'flex';
+              dialog.style.opacity = '1';
+              dialog.focus();
+            })
+            .catch(err => {
+              console.error('Error attempting to enable fullscreen:', err);
+            });
+        } else if (dialog.mozRequestFullScreen) { // Firefox
+          dialog.mozRequestFullScreen();
+        } else if (dialog.webkitRequestFullscreen) { // Chrome, Safari и Opera
+          dialog.webkitRequestFullscreen();
+        } else if (dialog.msRequestFullscreen) { // IE/Edge
+          dialog.msRequestFullscreen();
         }
         
         // Изменяем иконку
@@ -1192,7 +1215,16 @@ class ESP32RobotCard extends LitElement {
       } else {
         // Выходим из полноэкранного режима
         if (document.exitFullscreen) {
-          document.exitFullscreen();
+          document.exitFullscreen()
+            .then(() => {
+              // Обеспечиваем видимость диалога после выхода из полноэкранного режима
+              dialog.style.display = 'flex';
+              dialog.style.opacity = '1';
+              dialog.focus();
+            })
+            .catch(err => {
+              console.error('Error exiting fullscreen:', err);
+            });
         } else if (document.mozCancelFullScreen) {
           document.mozCancelFullScreen();
         } else if (document.webkitExitFullscreen) {
@@ -1208,36 +1240,70 @@ class ESP32RobotCard extends LitElement {
     
     // Обработчик изменения состояния полноэкранного режима
     document.addEventListener('fullscreenchange', () => {
-      if (document.fullscreenElement) {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-      } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-      }
+      // После изменения полноэкранного режима, убедимся, что диалог видим
+      setTimeout(() => {
+        dialog.style.display = 'flex';
+        dialog.style.opacity = '1';
+        
+        if (document.fullscreenElement) {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+        } else {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
+          // При выходе из полноэкранного режима тоже убедимся, что диалог видим
+          dialog.style.display = 'flex';
+          dialog.style.opacity = '1';
+          dialog.focus();
+        }
+      }, 100); // Небольшая задержка для обеспечения стабильности
     });
     
-    // Поддержка префиксов разных браузеров
+    // Аналогично для других префиксов
     document.addEventListener('webkitfullscreenchange', () => {
-      if (document.webkitFullscreenElement) {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-      } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-      }
+      setTimeout(() => {
+        dialog.style.display = 'flex';
+        dialog.style.opacity = '1';
+        
+        if (document.webkitFullscreenElement) {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+        } else {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
+          dialog.style.display = 'flex';
+          dialog.style.opacity = '1';
+          dialog.focus();
+        }
+      }, 100);
     });
     
     document.addEventListener('mozfullscreenchange', () => {
-      if (document.mozFullScreenElement) {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-      } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-      }
+      setTimeout(() => {
+        dialog.style.display = 'flex';
+        dialog.style.opacity = '1';
+        
+        if (document.mozFullScreenElement) {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+        } else {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
+          dialog.style.display = 'flex';
+          dialog.style.opacity = '1';
+          dialog.focus();
+        }
+      }, 100);
     });
     
     document.addEventListener('MSFullscreenChange', () => {
-      if (document.msFullscreenElement) {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-      } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-      }
+      setTimeout(() => {
+        dialog.style.display = 'flex';
+        dialog.style.opacity = '1';
+        
+        if (document.msFullscreenElement) {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+        } else {
+          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
+          dialog.style.display = 'flex';
+          dialog.style.opacity = '1';
+          dialog.focus();
+        }
+      }, 100);
     });
   }
 
