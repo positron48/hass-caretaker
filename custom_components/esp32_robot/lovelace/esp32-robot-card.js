@@ -94,6 +94,7 @@ class ESP32RobotCard extends LitElement {
         font-weight: 500;
         margin-right: 16px;
         white-space: nowrap;
+        display: none;
       }
       
       .ip-container {
@@ -141,6 +142,10 @@ class ESP32RobotCard extends LitElement {
       .control-btn:hover {
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         opacity: 0.9;
+      }
+      
+      .control-btn:active {
+        transform: translateY(1px);
       }
       
       .error {
@@ -228,7 +233,6 @@ class ESP32RobotCard extends LitElement {
           <div class="title-status">
             <h2>${this._config.title || 'ESP32 Robot'}</h2>
             <div class="status-icon ${isOnline ? 'online' : 'offline'}"></div>
-            <div class="status-text">${status}</div>
           </div>
           
           <div class="ip-container">
@@ -243,7 +247,6 @@ class ESP32RobotCard extends LitElement {
             @click="${this._openControlInterface}"
             style="--mdc-theme-primary: ${isOnline ? 'var(--primary-color)' : 'var(--disabled-color)'}"
           >
-            <ha-icon icon="mdi:remote" style="margin-right: 4px;"></ha-icon>
             Control
           </mwc-button>
         </div>
@@ -448,7 +451,7 @@ class ESP32RobotCard extends LitElement {
     fullscreenButton.style.display = 'flex';
     fullscreenButton.style.alignItems = 'center';
     fullscreenButton.style.justifyContent = 'center';
-    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>'; // Используем символ из референса
+    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>'; // Используем символ из скриншота
     
     // Settings panel
     const settingsPanel = document.createElement('div');
@@ -888,8 +891,17 @@ class ESP32RobotCard extends LitElement {
       this._isStreaming = false;
       streamButton.innerHTML = '<span style="font-size: 20px;">▶</span>';
       streamButton.classList.remove('active');
-      videoImg.src = '';
+      
+      // Очистить обработчики событий перед изменением src
+      videoImg.onload = null;
+      videoImg.onerror = null;
+      // Сначала скрыть изображение, затем очистить источник
       videoImg.style.display = 'none';
+      // Используем setTimeout, чтобы дать браузеру время на обработку изменений
+      setTimeout(() => {
+        videoImg.src = '';
+      }, 10);
+      
       loadingEl.style.display = 'block';
       loadingEl.textContent = 'Click Start Stream button';
       fpsStatus.style.display = 'none';
@@ -1156,23 +1168,26 @@ class ESP32RobotCard extends LitElement {
   
   _initializeFullscreen(fullscreenButton, dialog) {
     fullscreenButton.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        // Проверяем доступность API полноэкранного режима для различных браузеров
-        if (dialog.requestFullscreen) {
-          dialog.requestFullscreen().catch(err => {
-            console.error('Error attempting to enable fullscreen:', err);
-          });
-        } else if (dialog.mozRequestFullScreen) { // Firefox
-          dialog.mozRequestFullScreen();
-        } else if (dialog.webkitRequestFullscreen) { // Chrome, Safari и Opera
-          dialog.webkitRequestFullscreen();
-        } else if (dialog.msRequestFullscreen) { // IE/Edge
-          dialog.msRequestFullscreen();
-        } else {
-          console.warn('Fullscreen API is not supported in this browser');
+      // Нам нужен полноэкранный режим браузера, а не диалога
+      // Проверяем, находимся ли мы в полноэкранном режиме
+      const isFullScreen = document.fullscreenElement || 
+                           document.webkitFullscreenElement || 
+                           document.mozFullScreenElement || 
+                           document.msFullscreenElement;
+      
+      if (!isFullScreen) {
+        // Запрашиваем полноэкранный режим для всего документа (как F11)
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+        } else if (document.documentElement.mozRequestFullScreen) { // Firefox
+          document.documentElement.mozRequestFullScreen();
+        } else if (document.documentElement.webkitRequestFullscreen) { // Chrome, Safari и Opera
+          document.documentElement.webkitRequestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) { // IE/Edge
+          document.documentElement.msRequestFullscreen();
         }
         
-        // Изменяем иконку на "выход из полноэкранного режима"
+        // Изменяем иконку
         fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
       } else {
         // Выходим из полноэкранного режима
@@ -1186,26 +1201,26 @@ class ESP32RobotCard extends LitElement {
           document.msExitFullscreen();
         }
         
-        // Возвращаем иконку полноэкранного режима
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+        // Возвращаем иконку
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
       }
     });
     
-    // Добавляем обработчик события для отслеживания изменения состояния полноэкранного режима
+    // Обработчик изменения состояния полноэкранного режима
     document.addEventListener('fullscreenchange', () => {
       if (document.fullscreenElement) {
         fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
       } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
       }
     });
     
-    // Поддержка различных префиксов браузеров
+    // Поддержка префиксов разных браузеров
     document.addEventListener('webkitfullscreenchange', () => {
       if (document.webkitFullscreenElement) {
         fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
       } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
       }
     });
     
@@ -1213,7 +1228,7 @@ class ESP32RobotCard extends LitElement {
       if (document.mozFullScreenElement) {
         fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
       } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
       }
     });
     
@@ -1221,7 +1236,7 @@ class ESP32RobotCard extends LitElement {
       if (document.msFullscreenElement) {
         fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
       } else {
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
       }
     });
   }
