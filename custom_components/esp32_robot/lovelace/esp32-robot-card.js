@@ -277,7 +277,7 @@ class ESP32RobotCard extends LitElement {
     videoContainer.style.aspectRatio = '4/3';
     videoContainer.style.maxHeight = '50vh';
 
-    // Loading indicator
+    // Loading indicator with improved styling
     const loadingEl = document.createElement('div');
     loadingEl.textContent = 'Click Start Stream button below';
     loadingEl.style.position = 'absolute';
@@ -291,10 +291,11 @@ class ESP32RobotCard extends LitElement {
     loadingEl.style.fontWeight = 'bold';
     loadingEl.style.padding = '16px';
     loadingEl.style.boxSizing = 'border-box';
+    loadingEl.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
     loadingEl.id = 'loading-indicator';
     videoContainer.appendChild(loadingEl);
 
-    // Video element
+    // Video element with improved styling
     const videoImg = document.createElement('img');
     videoImg.style.width = '100%';
     videoImg.style.height = '100%';
@@ -303,7 +304,7 @@ class ESP32RobotCard extends LitElement {
     videoImg.id = 'video-stream';
     videoContainer.appendChild(videoImg);
 
-    // Status display
+    // Status display with improved styling
     const statusContainer = document.createElement('div');
     statusContainer.style.display = 'flex';
     statusContainer.style.justifyContent = 'space-between';
@@ -311,6 +312,7 @@ class ESP32RobotCard extends LitElement {
     statusContainer.style.padding = '8px 16px';
     statusContainer.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.05))';
     statusContainer.style.borderRadius = 'var(--ha-card-border-radius, 8px)';
+    statusContainer.style.backdropFilter = 'blur(5px)';
     
     const statusLeft = document.createElement('div');
     statusLeft.id = 'status-left';
@@ -329,7 +331,7 @@ class ESP32RobotCard extends LitElement {
     controlsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
     controlsGrid.style.gap = '16px';
     
-    // Joystick container
+    // Joystick container with improved styling
     const joystickSection = document.createElement('div');
     joystickSection.style.display = 'flex';
     joystickSection.style.flexDirection = 'column';
@@ -351,18 +353,19 @@ class ESP32RobotCard extends LitElement {
     joystickContainer.style.marginBottom = 'auto';
     joystickContainer.style.maxWidth = '300px';
     joystickContainer.style.alignSelf = 'center';
+    joystickContainer.style.backdropFilter = 'blur(5px)';
     joystickContainer.id = 'joystick-container';
     
-    // Joystick handle
+    // Joystick handle with improved styling
     const joystickHandle = document.createElement('div');
     joystickHandle.style.position = 'absolute';
     joystickHandle.style.top = '50%';
     joystickHandle.style.left = '50%';
     joystickHandle.style.transform = 'translate(-50%, -50%)';
-    joystickHandle.style.width = '40px';
-    joystickHandle.style.height = '40px';
+    joystickHandle.style.width = '40%';
+    joystickHandle.style.height = '40%';
     joystickHandle.style.borderRadius = '50%';
-    joystickHandle.style.backgroundColor = 'var(--primary-color, #03a9f4)';
+    joystickHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
     joystickHandle.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
     joystickHandle.id = 'joystick-handle';
     joystickContainer.appendChild(joystickHandle);
@@ -387,7 +390,7 @@ class ESP32RobotCard extends LitElement {
     buttonContainer.style.gap = '8px';
     buttonContainer.style.marginTop = '16px';
     
-    // Stream toggle button
+    // Stream toggle button with improved styling
     const streamButton = document.createElement('button');
     streamButton.textContent = 'Start Stream';
     streamButton.className = 'ha-button primary';
@@ -398,18 +401,20 @@ class ESP32RobotCard extends LitElement {
     streamButton.style.border = 'none';
     streamButton.style.cursor = 'pointer';
     streamButton.style.flex = '1';
+    streamButton.style.transition = 'all 0.3s';
     streamButton.id = 'stream-button';
     
-    // Fullscreen button
+    // Fullscreen button with improved styling
     const fullscreenButton = document.createElement('button');
     fullscreenButton.textContent = 'Fullscreen';
     fullscreenButton.className = 'ha-button';
     fullscreenButton.style.padding = '8px 16px';
     fullscreenButton.style.borderRadius = 'var(--ha-card-border-radius, 4px)';
-    fullscreenButton.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.1))';
+    fullscreenButton.style.backgroundColor = 'rgba(255,255,255,0.1)';
     fullscreenButton.style.color = 'var(--primary-text-color, #fff)';
     fullscreenButton.style.border = 'none';
     fullscreenButton.style.cursor = 'pointer';
+    fullscreenButton.style.transition = 'all 0.3s';
     fullscreenButton.id = 'fullscreen-button';
     
     buttonContainer.appendChild(streamButton);
@@ -648,12 +653,12 @@ class ESP32RobotCard extends LitElement {
       joystickHandle.style.left = `${x}px`;
       joystickHandle.style.top = `${y}px`;
       
-      // Calculate control values (-100 to 100)
-      const normalizedX = Math.round(((x - centerX) / limitRadius) * 100);
-      const normalizedY = Math.round(((y - centerY) / limitRadius) * -100); // Invert Y
+      // Calculate control values (float values from -1 to 1)
+      const normalizedX = ((x - centerX) / limitRadius);
+      const normalizedY = ((y - centerY) / limitRadius) * -1; // Invert Y for traditional control scheme
       
       // Only send if values changed significantly
-      if (Math.abs(normalizedX - currentX) > 5 || Math.abs(normalizedY - currentY) > 5) {
+      if (Math.abs(normalizedX - currentX) > 0.05 || Math.abs(normalizedY - currentY) > 0.05) {
         currentX = normalizedX;
         currentY = normalizedY;
         sendJoystickData(normalizedX, normalizedY);
@@ -685,8 +690,8 @@ class ESP32RobotCard extends LitElement {
           },
           body: JSON.stringify({ 
             mode: 'joystick',
-            x: x,
-            y: y
+            x: parseFloat(x.toFixed(2)), // Convert to float with 2 decimal places for precision
+            y: parseFloat(y.toFixed(2))  // Convert to float with 2 decimal places for precision
           })
         });
         
