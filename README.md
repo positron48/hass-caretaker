@@ -2,6 +2,8 @@
 
 This integration allows you to monitor and control your ESP32-based robots through Home Assistant.
 
+![1000-lovelace-card](images/1000-lovelace-card.png)
+
 ## Features
 
 - Monitor robot status (online/offline)
@@ -23,6 +25,10 @@ The ESP32 Robot card provides a modern and intuitive control interface:
   - Image quality slider (8-64) with visual feedback
   - LED brightness control (0-100%)
 - **FPS Display**: Real-time frames-per-second counter with one decimal place precision
+
+![1000-dialog](images/1000-dialog.png)
+
+![1000-dialog-settings](images/1000-dialog-settings.png)
 
 ## Security Features
 
@@ -119,6 +125,6 @@ If you're having issues with stream authentication:
 2. Verify that the robot is online and accessible
 3. Check the browser console for any errors related to image loading
 
-## Advanced Configuration
+## Architecture
 
-The integration automatically manages secure streaming. No additional configuration is needed for standard usage. 
+Details available in russian [here](architecture.md).
