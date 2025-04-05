@@ -133,13 +133,17 @@ class ESP32RobotCard extends LitElement {
         border: none;
         border-radius: 4px;
         height: 36px;
-        padding: 0 16px;
+        width: 36px;
+        padding: 0;
         margin-left: 8px;
-        font-size: 14px;
+        margin-right: 8px;
+        font-size: 18px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease-in-out;
-        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       
       .control-btn[disabled] {
@@ -253,8 +257,11 @@ class ESP32RobotCard extends LitElement {
             class="control-btn" 
             ?disabled="${!isOnline}" 
             @click="${this._openControlInterface}"
+            title="Control Interface"
           >
-            CONTROL
+            <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9S16.97,3,12,3z M12,7c1.65,0,3,1.35,3,3s-1.35,3-3,3 s-3-1.35-3-3S10.35,7,12,7z M12,18.9c-2.48,0-4.71-1.18-6.14-3c0.68-1.35,2.31-2.25,4.14-2.25h4c1.83,0,3.46,0.9,4.14,2.25 C16.71,17.72,14.48,18.9,12,18.9z"/>
+            </svg>
           </button>
         </div>
         
@@ -1174,109 +1181,79 @@ class ESP32RobotCard extends LitElement {
   }
   
   _initializeFullscreen(fullscreenButton, dialog) {
-    // Упрощенная версия обработчика для кнопки полноэкранного режима
-    // Имитирует нажатие клавиши F11 вместо использования Fullscreen API
+    // Используем прямой подход к API полноэкранного режима для window/document
     
-    // Переменная для отслеживания состояния полноэкранного режима
-    let isFullscreen = false;
-    
-    // Устанавливаем начальное состояние иконки
-    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-    
-    // Функция для имитации нажатия F11
-    const toggleFullscreen = () => {
-      // Переключаем состояние
-      isFullscreen = !isFullscreen;
+    // Обновляем иконку в зависимости от текущего состояния
+    const updateIcon = () => {
+      const isFullscreen = !!(
+        document.fullscreenElement || 
+        document.webkitFullscreenElement || 
+        document.mozFullScreenElement || 
+        document.msFullscreenElement
+      );
       
-      // Обновляем иконку
       fullscreenButton.innerHTML = isFullscreen 
         ? '<span style="font-size: 20px;">□</span>' 
         : '<span style="font-size: 20px;">⧉</span>';
-      
-      try {
-        // Создаем и отправляем событие нажатия клавиши F11
-        const keyEvent = new KeyboardEvent('keydown', {
-          key: 'F11',
-          code: 'F11',
-          keyCode: 122,
-          which: 122,
-          bubbles: true,
-          cancelable: true
-        });
-        
-        document.dispatchEvent(keyEvent);
-        console.log('F11 keypress event dispatched');
-      } catch (error) {
-        console.log('Could not dispatch F11 event, trying alternative approach');
-        
-        // Если событие не сработало, пробуем альтернативный подход
-        // через встроенные методы браузера для всего окна
-        if (!isFullscreen) {
-          if (document.documentElement.requestFullscreen) {
-            document.documentElement.requestFullscreen();
-          } else if (document.documentElement.mozRequestFullScreen) {
-            document.documentElement.mozRequestFullScreen();
-          } else if (document.documentElement.webkitRequestFullscreen) {
-            document.documentElement.webkitRequestFullscreen();
-          } else if (document.documentElement.msRequestFullscreen) {
-            document.documentElement.msRequestFullscreen();
-          }
-        } else {
-          if (document.exitFullscreen) {
-            document.exitFullscreen();
-          } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-          }
-        }
-      }
     };
     
-    // Добавляем обработчик клика по кнопке
-    fullscreenButton.addEventListener('click', toggleFullscreen);
+    // Начальная установка иконки
+    updateIcon();
     
-    // Добавляем обработчик нажатия клавиши F11 для синхронизации иконки
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'F11' || e.code === 'F11') {
-        isFullscreen = !isFullscreen;
-        fullscreenButton.innerHTML = isFullscreen 
-          ? '<span style="font-size: 20px;">□</span>' 
-          : '<span style="font-size: 20px;">⧉</span>';
+    // Обработчик клика по кнопке
+    fullscreenButton.addEventListener('click', () => {
+      const isFullscreen = !!(
+        document.fullscreenElement || 
+        document.webkitFullscreenElement || 
+        document.mozFullScreenElement || 
+        document.msFullscreenElement
+      );
+      
+      if (!isFullscreen) {
+        // Переход в полноэкранный режим
+        try {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          } else if (document.documentElement.mozRequestFullScreen) {
+            document.documentElement.mozRequestFullScreen();
+          } else if (document.documentElement.msRequestFullscreen) {
+            document.documentElement.msRequestFullscreen();
+          } else {
+            console.warn('Fullscreen API not supported by this browser');
+          }
+        } catch (error) {
+          console.error('Error entering fullscreen mode:', error);
+        }
+      } else {
+        // Выход из полноэкранного режима
+        try {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          } else {
+            console.warn('Fullscreen API not supported by this browser');
+          }
+        } catch (error) {
+          console.error('Error exiting fullscreen mode:', error);
+        }
       }
+      
+      // Обновляем иконку после переключения
+      setTimeout(updateIcon, 100);
     });
     
-    // Обработчик для синхронизации состояния, если пользователь использует другие
-    // методы для входа/выхода из полноэкранного режима
-    document.addEventListener('fullscreenchange', () => {
-      isFullscreen = !!document.fullscreenElement;
-      fullscreenButton.innerHTML = isFullscreen 
-        ? '<span style="font-size: 20px;">□</span>' 
-        : '<span style="font-size: 20px;">⧉</span>';
-    });
-    
-    document.addEventListener('webkitfullscreenchange', () => {
-      isFullscreen = !!document.webkitFullscreenElement;
-      fullscreenButton.innerHTML = isFullscreen 
-        ? '<span style="font-size: 20px;">□</span>' 
-        : '<span style="font-size: 20px;">⧉</span>';
-    });
-    
-    document.addEventListener('mozfullscreenchange', () => {
-      isFullscreen = !!document.mozFullScreenElement;
-      fullscreenButton.innerHTML = isFullscreen 
-        ? '<span style="font-size: 20px;">□</span>' 
-        : '<span style="font-size: 20px;">⧉</span>';
-    });
-    
-    document.addEventListener('MSFullscreenChange', () => {
-      isFullscreen = !!document.msFullscreenElement;
-      fullscreenButton.innerHTML = isFullscreen 
-        ? '<span style="font-size: 20px;">□</span>' 
-        : '<span style="font-size: 20px;">⧉</span>';
-    });
+    // Обработчики событий изменения полноэкранного режима для всех браузеров
+    document.addEventListener('fullscreenchange', updateIcon);
+    document.addEventListener('webkitfullscreenchange', updateIcon);
+    document.addEventListener('mozfullscreenchange', updateIcon);
+    document.addEventListener('MSFullscreenChange', updateIcon);
   }
 
   // Add new method to initialize camera settings
