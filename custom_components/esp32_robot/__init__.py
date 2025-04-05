@@ -117,69 +117,88 @@ class ESP32RobotProxyView(HomeAssistantView):
                     _LOGGER.debug("Forwarding request to robot at %s: %s %s", ip_address, method, path)
                     
                     try:
-                        async with async_timeout.timeout(10):
-                            data = None
-                            if method == "POST":
-                                data = await request.read()
-                            
-                            # Copy original headers (except host and authorization)
-                            headers = {}
-                            for name, value in request.headers.items():
-                                if name.lower() not in ('host', 'authorization'):
-                                    headers[name] = value
-                            
-                            # Get query parameters
-                            params = dict(request.query)
-                            
-                            # Create a client session and make the request
-                            async with aiohttp.ClientSession() as session:
-                                if method == "GET":
-                                    async with session.get(url, params=params, headers=headers) as response:
-                                        content_type = response.headers.get('Content-Type', 'application/json')
-                                        _LOGGER.debug("Response content type: %s for path: %s", content_type, path)
+                        # Increased timeout for stream requests - MJPEG streams can run indefinitely
+                        stream_timeout = None if path == "stream" else 30
+                        
+                        data = None
+                        if method == "POST":
+                            data = await request.read()
+                        
+                        # Copy original headers (except host and authorization)
+                        headers = {}
+                        for name, value in request.headers.items():
+                            if name.lower() not in ('host', 'authorization'):
+                                headers[name] = value
+                        
+                        # Get query parameters
+                        params = dict(request.query)
+                        
+                        # Create a client session and make the request
+                        connector = aiohttp.TCPConnector(force_close=False)  # Keep connections alive
+                        client_timeout = aiohttp.ClientTimeout(total=stream_timeout)
+                        
+                        async with aiohttp.ClientSession(connector=connector, timeout=client_timeout) as session:
+                            if method == "GET":
+                                async with session.get(url, params=params, headers=headers) as response:
+                                    content_type = response.headers.get('Content-Type', 'application/json')
+                                    _LOGGER.debug("Response content type: %s for path: %s", content_type, path)
+                                    
+                                    if 'multipart/x-mixed-replace' in content_type:
+                                        # For MJPEG streams, we need to create a streaming response
+                                        _LOGGER.debug("Handling MJPEG stream from %s", url)
                                         
-                                        if 'multipart/x-mixed-replace' in content_type:
-                                            # For MJPEG streams, we need to create a streaming response
-                                            _LOGGER.debug("Handling MJPEG stream from %s", url)
-                                            
-                                            # Create a response object with the same headers
-                                            resp = aiohttp.web.StreamResponse(status=response.status)
-                                            for name, value in response.headers.items():
-                                                if name.lower() not in ('transfer-encoding',):
-                                                    resp.headers[name] = value
-                                            
-                                            # Start the response
-                                            await resp.prepare(request)
-                                            _LOGGER.debug("MJPEG stream response prepared")
-                                            
-                                            # Stream the content
-                                            try:
-                                                async for chunk in response.content.iter_any():
+                                        # Create a response object with the same headers
+                                        resp = aiohttp.web.StreamResponse(status=response.status)
+                                        for name, value in response.headers.items():
+                                            if name.lower() not in ('transfer-encoding',):
+                                                resp.headers[name] = value
+                                        
+                                        # Start the response
+                                        await resp.prepare(request)
+                                        _LOGGER.debug("MJPEG stream response prepared")
+                                        
+                                        # Larger buffer size for better performance
+                                        buffer_size = 4096
+                                        
+                                        # Stream the content with proper error handling
+                                        try:
+                                            async for chunk in response.content.iter_chunked(buffer_size):
+                                                if chunk:  # Only process non-empty chunks
                                                     await resp.write(chunk)
-                                            except Exception as e:
-                                                _LOGGER.error("Error streaming MJPEG content: %s", str(e))
-                                                return self.json_message(f"Streaming error: {str(e)}", 500)
-                                            
-                                            _LOGGER.debug("MJPEG stream completed")
-                                            # End the response
-                                            await resp.write_eof()
+                                                    # Small delay to avoid overwhelming the client
+                                                    await asyncio.sleep(0.001)
+                                        except ConnectionResetError:
+                                            _LOGGER.warning("Client disconnected from stream")
                                             return resp
-                                        elif 'image' in content_type:
-                                            # For static images, return raw content
-                                            data = await response.read()
-                                            return aiohttp.web.Response(body=data, content_type=content_type)
-                                        else:
-                                            # For other responses, return as JSON or text
-                                            text = await response.text()
-                                            return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
-                                else:  # POST
-                                    async with session.post(url, params=params, data=data, headers=headers) as response:
+                                        except asyncio.CancelledError:
+                                            _LOGGER.warning("Stream was cancelled")
+                                            return resp
+                                        except Exception as e:
+                                            _LOGGER.error("Error streaming MJPEG content: %s", str(e))
+                                            return self.json_message(f"Streaming error: {str(e)}", 500)
+                                        
+                                        _LOGGER.debug("MJPEG stream completed")
+                                        # End the response
+                                        await resp.write_eof()
+                                        return resp
+                                    elif 'image' in content_type:
+                                        # For static images, return raw content
+                                        data = await response.read()
+                                        return aiohttp.web.Response(body=data, content_type=content_type)
+                                    else:
+                                        # For other responses, return as JSON or text
                                         text = await response.text()
-                                        content_type = response.headers.get('Content-Type', 'application/json')
                                         return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
+                            else:  # POST
+                                async with session.post(url, params=params, data=data, headers=headers) as response:
+                                    text = await response.text()
+                                    content_type = response.headers.get('Content-Type', 'application/json')
+                                    return aiohttp.web.Response(text=text, content_type=content_type, status=response.status)
                     
                     except asyncio.TimeoutError:
                         return self.json_message("Request to robot timed out", 504)
+                    except ConnectionRefusedError:
+                        return self.json_message("Connection refused by robot", 502)
                     except Exception as e:
                         _LOGGER.error("Error forwarding request to robot: %s", str(e))
                         return self.json_message(f"Error: {str(e)}", 500)
