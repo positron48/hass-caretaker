@@ -203,7 +203,7 @@ class ESP32RobotCard extends LitElement {
     const entityId = this._entity.entity_id.split(".")[1];
     const title = this._config.title || 'ESP32 Robot';
 
-    // Create a modal dialog
+    // Create a modal dialog with full black background
     const dialog = document.createElement('dialog');
     dialog.id = `esp32-robot-dialog-${entityId}`;
     dialog.className = 'esp32-robot-dialog';
@@ -213,11 +213,12 @@ class ESP32RobotCard extends LitElement {
     dialog.style.width = '100%';
     dialog.style.height = '100%';
     dialog.style.padding = '0';
+    dialog.style.margin = '0';
     dialog.style.border = 'none';
     dialog.style.zIndex = '9999';
-    dialog.style.backgroundColor = 'var(--primary-background-color, #111)';
+    dialog.style.backgroundColor = '#000'; // Pure black background
     dialog.style.color = 'var(--primary-text-color, #fff)';
-    dialog.style.overflow = 'auto';
+    dialog.style.overflow = 'hidden'; // Prevent scrolling
     dialog.style.display = 'flex';
     dialog.style.flexDirection = 'column';
 
@@ -227,7 +228,13 @@ class ESP32RobotCard extends LitElement {
     header.style.justifyContent = 'space-between';
     header.style.alignItems = 'center';
     header.style.padding = '16px';
-    header.style.borderBottom = '1px solid var(--divider-color, rgba(255,255,255,0.12))';
+    header.style.position = 'absolute';
+    header.style.top = '0';
+    header.style.left = '0';
+    header.style.right = '0';
+    header.style.zIndex = '10';
+    header.style.background = 'rgba(0, 0, 0, 0.5)';
+    header.style.backdropFilter = 'blur(5px)';
     
     const headerTitle = document.createElement('h2');
     headerTitle.textContent = title;
@@ -252,32 +259,24 @@ class ESP32RobotCard extends LitElement {
     header.appendChild(headerTitle);
     header.appendChild(closeButton);
 
-    // Create container for controls
+    // Container with overlay structure like in original design
     const container = document.createElement('div');
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.flex = '1';
-    container.style.padding = '16px';
-    container.style.boxSizing = 'border-box';
-    container.style.maxWidth = '960px';
-    container.style.margin = '0 auto';
+    container.style.position = 'relative';
     container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.overflow = 'hidden';
 
-    // Create video container
+    // Video container takes full space
     const videoContainer = document.createElement('div');
-    videoContainer.style.position = 'relative';
+    videoContainer.style.position = 'absolute';
+    videoContainer.style.top = '0';
+    videoContainer.style.left = '0';
     videoContainer.style.width = '100%';
-    videoContainer.style.backgroundColor = 'var(--card-background-color, #000)';
-    videoContainer.style.borderRadius = 'var(--ha-card-border-radius, 8px)';
-    videoContainer.style.overflow = 'hidden';
-    videoContainer.style.marginBottom = '16px';
-    videoContainer.style.display = 'flex';
-    videoContainer.style.justifyContent = 'center';
-    videoContainer.style.alignItems = 'center';
-    videoContainer.style.aspectRatio = '4/3';
-    videoContainer.style.maxHeight = '50vh';
-
-    // Loading indicator with improved styling
+    videoContainer.style.height = '100%';
+    videoContainer.style.zIndex = '1';
+    videoContainer.style.backgroundColor = '#000';
+    
+    // Loading indicator
     const loadingEl = document.createElement('div');
     loadingEl.textContent = 'Click Start Stream button below';
     loadingEl.style.position = 'absolute';
@@ -295,7 +294,7 @@ class ESP32RobotCard extends LitElement {
     loadingEl.id = 'loading-indicator';
     videoContainer.appendChild(loadingEl);
 
-    // Video element with improved styling
+    // Video element
     const videoImg = document.createElement('img');
     videoImg.style.width = '100%';
     videoImg.style.height = '100%';
@@ -304,133 +303,137 @@ class ESP32RobotCard extends LitElement {
     videoImg.id = 'video-stream';
     videoContainer.appendChild(videoImg);
 
-    // Status display with improved styling
-    const statusContainer = document.createElement('div');
-    statusContainer.style.display = 'flex';
-    statusContainer.style.justifyContent = 'space-between';
-    statusContainer.style.marginBottom = '16px';
-    statusContainer.style.padding = '8px 16px';
-    statusContainer.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.05))';
-    statusContainer.style.borderRadius = 'var(--ha-card-border-radius, 8px)';
-    statusContainer.style.backdropFilter = 'blur(5px)';
-    
-    const statusLeft = document.createElement('div');
-    statusLeft.id = 'status-left';
-    statusLeft.textContent = 'FPS: --';
-    
-    const statusRight = document.createElement('div');
-    statusRight.id = 'status-right';
-    statusRight.textContent = 'Stream: inactive';
-    
-    statusContainer.appendChild(statusLeft);
-    statusContainer.appendChild(statusRight);
+    // Controls overlay (positioned over the video)
+    const controlsOverlay = document.createElement('div');
+    controlsOverlay.style.position = 'absolute';
+    controlsOverlay.style.zIndex = '2';
+    controlsOverlay.style.width = '100%';
+    controlsOverlay.style.height = '100%';
+    controlsOverlay.style.pointerEvents = 'none'; // Allow clicks to pass through by default
 
-    // Controls grid layout
-    const controlsGrid = document.createElement('div');
-    controlsGrid.style.display = 'grid';
-    controlsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
-    controlsGrid.style.gap = '16px';
+    // Top controls section
+    const controlsTop = document.createElement('div');
+    controlsTop.style.position = 'absolute';
+    controlsTop.style.top = '20px';
+    controlsTop.style.left = '20px';
+    controlsTop.style.display = 'flex';
+    controlsTop.style.alignItems = 'center';
+    controlsTop.style.gap = '16px';
+    controlsTop.style.pointerEvents = 'all'; // This section captures clicks
+    controlsTop.style.background = 'rgba(0, 0, 0, 0.5)';
+    controlsTop.style.padding = '8px';
+    controlsTop.style.borderRadius = '8px';
+    controlsTop.style.backdropFilter = 'blur(5px)';
+
+    // Stream toggle button
+    const streamToggle = document.createElement('button');
+    streamToggle.className = 'button icon-button';
+    streamToggle.title = 'Start/Stop Stream';
+    streamToggle.style.padding = '10px';
+    streamToggle.style.minWidth = '44px';
+    streamToggle.style.minHeight = '44px';
+    streamToggle.style.border = 'none';
+    streamToggle.style.borderRadius = '6px';
+    streamToggle.style.cursor = 'pointer';
+    streamToggle.style.fontSize = '14px';
+    streamToggle.style.background = 'rgba(255, 255, 255, 0.1)';
+    streamToggle.style.color = 'white';
+    streamToggle.style.transition = 'all 0.3s';
+    streamToggle.style.display = 'flex';
+    streamToggle.style.alignItems = 'center';
+    streamToggle.style.justifyContent = 'center';
+    streamToggle.innerHTML = '<span style="font-size: 20px;">▶</span>';
+    streamToggle.id = 'stream-button';
+    controlsTop.appendChild(streamToggle);
     
-    // Joystick container with improved styling
-    const joystickSection = document.createElement('div');
-    joystickSection.style.display = 'flex';
-    joystickSection.style.flexDirection = 'column';
+    // Fullscreen button (in top-right corner)
+    const fullscreenButton = document.createElement('button');
+    fullscreenButton.className = 'button icon-button';
+    fullscreenButton.title = 'Fullscreen';
+    fullscreenButton.style.position = 'absolute';
+    fullscreenButton.style.top = '20px';
+    fullscreenButton.style.right = '20px';
+    fullscreenButton.style.zIndex = '10';
+    fullscreenButton.style.pointerEvents = 'all';
+    fullscreenButton.style.background = 'rgba(0, 0, 0, 0.5)';
+    fullscreenButton.style.padding = '10px';
+    fullscreenButton.style.borderRadius = '8px';
+    fullscreenButton.style.backdropFilter = 'blur(5px)';
+    fullscreenButton.style.minWidth = '44px';
+    fullscreenButton.style.minHeight = '44px';
+    fullscreenButton.style.border = 'none';
+    fullscreenButton.style.cursor = 'pointer';
+    fullscreenButton.style.fontSize = '14px';
+    fullscreenButton.style.color = 'white';
+    fullscreenButton.style.transition = 'all 0.3s';
+    fullscreenButton.style.display = 'flex';
+    fullscreenButton.style.alignItems = 'center';
+    fullscreenButton.style.justifyContent = 'center';
+    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
     
-    const joystickTitle = document.createElement('h3');
-    joystickTitle.textContent = 'Controls';
-    joystickTitle.style.margin = '0 0 8px 0';
-    joystickTitle.style.fontSize = '16px';
-    joystickTitle.style.fontWeight = '500';
+    // Right controls section (joystick)
+    const controlsRight = document.createElement('div');
+    controlsRight.style.position = 'absolute';
+    controlsRight.style.right = '20px';
+    controlsRight.style.top = '50%';
+    controlsRight.style.transform = 'translateY(-50%)';
+    controlsRight.style.pointerEvents = 'all';
+    controlsRight.style.display = 'flex';
+    controlsRight.style.flexDirection = 'column';
+    controlsRight.style.gap = '16px';
     
+    // Joystick container
     const joystickContainer = document.createElement('div');
-    joystickContainer.style.position = 'relative';
-    joystickContainer.style.width = '100%';
-    joystickContainer.style.aspectRatio = '1/1';
-    joystickContainer.style.backgroundColor = 'var(--card-background-color, rgba(255,255,255,0.1))';
+    joystickContainer.style.width = '200px';
+    joystickContainer.style.height = '200px';
+    joystickContainer.style.background = 'rgba(0, 0, 0, 0.5)';
     joystickContainer.style.borderRadius = '50%';
     joystickContainer.style.touchAction = 'none';
-    joystickContainer.style.marginTop = 'auto';
-    joystickContainer.style.marginBottom = 'auto';
-    joystickContainer.style.maxWidth = '300px';
-    joystickContainer.style.alignSelf = 'center';
+    joystickContainer.style.position = 'relative';
     joystickContainer.style.backdropFilter = 'blur(5px)';
+    joystickContainer.style.border = '1px solid rgba(255, 255, 255, 0.1)';
     joystickContainer.id = 'joystick-container';
     
-    // Joystick handle with improved styling
+    // Joystick handle
     const joystickHandle = document.createElement('div');
+    joystickHandle.style.width = '40%';
+    joystickHandle.style.height = '40%';
+    joystickHandle.style.background = 'rgba(255, 255, 255, 0.8)';
+    joystickHandle.style.borderRadius = '50%';
     joystickHandle.style.position = 'absolute';
     joystickHandle.style.top = '50%';
     joystickHandle.style.left = '50%';
     joystickHandle.style.transform = 'translate(-50%, -50%)';
-    joystickHandle.style.width = '40%';
-    joystickHandle.style.height = '40%';
-    joystickHandle.style.borderRadius = '50%';
-    joystickHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-    joystickHandle.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4)';
-    joystickHandle.id = 'joystick-handle';
+    joystickHandle.style.cursor = 'pointer';
+    joystickHandle.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.4)';
+    joystickHandle.id = 'stick';
     joystickContainer.appendChild(joystickHandle);
     
-    joystickSection.appendChild(joystickTitle);
-    joystickSection.appendChild(joystickContainer);
+    controlsRight.appendChild(joystickContainer);
     
-    // Stream settings section
-    const streamSection = document.createElement('div');
-    streamSection.style.display = 'flex';
-    streamSection.style.flexDirection = 'column';
+    // Status display for FPS (bottom right)
+    const fpsStatus = document.createElement('div');
+    fpsStatus.style.position = 'absolute';
+    fpsStatus.style.bottom = '10px';
+    fpsStatus.style.right = '10px';
+    fpsStatus.style.background = 'rgba(0, 0, 0, 0.5)';
+    fpsStatus.style.color = 'white';
+    fpsStatus.style.padding = '5px 8px';
+    fpsStatus.style.borderRadius = '4px';
+    fpsStatus.style.fontSize = '12px';
+    fpsStatus.style.zIndex = '10';
+    fpsStatus.id = 'fps-status';
+    fpsStatus.textContent = 'FPS: --';
+    fpsStatus.style.display = 'none'; // Initially hidden
     
-    const streamTitle = document.createElement('h3');
-    streamTitle.textContent = 'Stream';
-    streamTitle.style.margin = '0 0 8px 0';
-    streamTitle.style.fontSize = '16px';
-    streamTitle.style.fontWeight = '500';
-    
-    // Button container
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.gap = '8px';
-    buttonContainer.style.marginTop = '16px';
-    
-    // Stream toggle button with improved styling
-    const streamButton = document.createElement('button');
-    streamButton.textContent = 'Start Stream';
-    streamButton.className = 'ha-button primary';
-    streamButton.style.padding = '8px 16px';
-    streamButton.style.borderRadius = 'var(--ha-card-border-radius, 4px)';
-    streamButton.style.backgroundColor = 'var(--primary-color, #03a9f4)';
-    streamButton.style.color = 'var(--text-primary-color, #fff)';
-    streamButton.style.border = 'none';
-    streamButton.style.cursor = 'pointer';
-    streamButton.style.flex = '1';
-    streamButton.style.transition = 'all 0.3s';
-    streamButton.id = 'stream-button';
-    
-    // Fullscreen button with improved styling
-    const fullscreenButton = document.createElement('button');
-    fullscreenButton.textContent = 'Fullscreen';
-    fullscreenButton.className = 'ha-button';
-    fullscreenButton.style.padding = '8px 16px';
-    fullscreenButton.style.borderRadius = 'var(--ha-card-border-radius, 4px)';
-    fullscreenButton.style.backgroundColor = 'rgba(255,255,255,0.1)';
-    fullscreenButton.style.color = 'var(--primary-text-color, #fff)';
-    fullscreenButton.style.border = 'none';
-    fullscreenButton.style.cursor = 'pointer';
-    fullscreenButton.style.transition = 'all 0.3s';
-    fullscreenButton.id = 'fullscreen-button';
-    
-    buttonContainer.appendChild(streamButton);
-    buttonContainer.appendChild(fullscreenButton);
-    
-    streamSection.appendChild(streamTitle);
-    streamSection.appendChild(buttonContainer);
-    
-    // Add all elements to the grid
-    controlsGrid.appendChild(joystickSection);
-    controlsGrid.appendChild(streamSection);
-
     // Add all elements to the container
+    controlsOverlay.appendChild(controlsTop);
+    controlsOverlay.appendChild(controlsRight);
+    controlsOverlay.appendChild(fullscreenButton);
+    controlsOverlay.appendChild(fpsStatus);
+    
     container.appendChild(videoContainer);
-    container.appendChild(statusContainer);
-    container.appendChild(controlsGrid);
+    container.appendChild(controlsOverlay);
     
     // Add elements to the dialog
     dialog.appendChild(header);
@@ -441,19 +444,20 @@ class ESP32RobotCard extends LitElement {
     dialog.showModal();
     
     // Initialize functionality
-    this._initializeStreaming(entityId, videoImg, loadingEl, streamButton, statusLeft, statusRight);
+    this._initializeStreaming(entityId, videoImg, loadingEl, streamToggle, fpsStatus);
     this._initializeJoystick(entityId, joystickContainer, joystickHandle);
     this._initializeFullscreen(fullscreenButton, dialog);
   }
   
-  _initializeStreaming(entityId, videoImg, loadingEl, streamButton, statusLeft, statusRight) {
+  _initializeStreaming(entityId, videoImg, loadingEl, streamButton, fpsStatus) {
     // Move isStreaming to a class property so it can be accessed by all methods
     this._isStreaming = false;
     
     // Function to start streaming
     const startStream = async () => {
       this._isStreaming = true;
-      streamButton.textContent = 'Stop Stream';
+      streamButton.innerHTML = '<span style="font-size: 20px;">■</span>';
+      streamButton.classList.add('active');
       loadingEl.style.display = 'block';
       loadingEl.textContent = 'Starting stream...';
       videoImg.style.display = 'none';
@@ -470,22 +474,27 @@ class ESP32RobotCard extends LitElement {
           console.log("Stream loaded successfully");
           loadingEl.style.display = 'none';
           videoImg.style.display = 'block';
+          fpsStatus.style.display = 'block'; // Show FPS when stream starts
         };
         
         videoImg.onerror = (error) => {
           console.error("Stream error:", error);
           loadingEl.textContent = 'Stream error. Please try again.';
           this._isStreaming = false;
-          streamButton.textContent = 'Start Stream';
+          streamButton.innerHTML = '<span style="font-size: 20px;">▶</span>';
+          streamButton.classList.remove('active');
+          fpsStatus.style.display = 'none';
         };
         
         // Poll for status updates
-        this._startStatusPolling(entityId, statusLeft, statusRight);
+        this._startStatusPolling(entityId, fpsStatus);
       } catch (error) {
         console.error('Error starting stream:', error);
         loadingEl.textContent = `Stream error: ${error.message}`;
         this._isStreaming = false;
-        streamButton.textContent = 'Start Stream';
+        streamButton.innerHTML = '<span style="font-size: 20px;">▶</span>';
+        streamButton.classList.remove('active');
+        fpsStatus.style.display = 'none';
       }
     };
     
@@ -505,11 +514,13 @@ class ESP32RobotCard extends LitElement {
       });
       
       this._isStreaming = false;
-      streamButton.textContent = 'Start Stream';
+      streamButton.innerHTML = '<span style="font-size: 20px;">▶</span>';
+      streamButton.classList.remove('active');
       videoImg.src = '';
       videoImg.style.display = 'none';
       loadingEl.style.display = 'block';
-      loadingEl.textContent = 'Click Start Stream button below';
+      loadingEl.textContent = 'Click Start Stream button';
+      fpsStatus.style.display = 'none';
     };
     
     // Initialize button click
@@ -522,7 +533,7 @@ class ESP32RobotCard extends LitElement {
     });
     
     // Do not start stream by default, just show the placeholder
-    loadingEl.textContent = 'Click Start Stream button below';
+    loadingEl.textContent = 'Click Start Stream button';
   }
   
   // Simple promise-based function to get a signed URL
@@ -553,7 +564,7 @@ class ESP32RobotCard extends LitElement {
     }
   }
   
-  _startStatusPolling(entityId, statusLeft, statusRight) {
+  _startStatusPolling(entityId, fpsStatus) {
     const statusUrl = `/api/esp32_robot/proxy/${entityId}/status`;
     
     // Clear existing interval
@@ -567,10 +578,15 @@ class ESP32RobotCard extends LitElement {
         const response = await this._hass.fetchWithAuth(statusUrl);
         if (response.ok) {
           const data = await response.json();
-          statusLeft.textContent = `FPS: ${data.fps || '--'}`;
-          statusRight.textContent = `Stream: ${data.streaming ? 'active' : 'inactive'}`;
+          // Update FPS with one decimal place
+          if (data.fps !== undefined) {
+            fpsStatus.textContent = `FPS: ${data.fps.toFixed(1)}`;
+            fpsStatus.style.display = 'block';
+          } else {
+            fpsStatus.textContent = 'FPS: --';
+          }
         } else {
-          statusLeft.textContent = 'Status: error';
+          fpsStatus.textContent = 'FPS: error';
         }
       } catch (error) {
         console.error('Error fetching status:', error);
@@ -587,28 +603,10 @@ class ESP32RobotCard extends LitElement {
   _initializeJoystick(entityId, joystickContainer, joystickHandle) {
     const baseControlUrl = `/api/esp32_robot/proxy/${entityId}/control`;
     let isDragging = false;
-    let centerX, centerY, limitRadius;
     let currentX = 0, currentY = 0;
     let lastJoystickSendTime = 0;
     let pendingJoystickSend = null;
     const THROTTLE_MS = 100; // Throttle sending commands to 10 times per second
-    
-    // Calculate joystick boundaries
-    const updateDimensions = () => {
-      const rect = joystickContainer.getBoundingClientRect();
-      centerX = rect.width / 2;
-      centerY = rect.height / 2;
-      limitRadius = Math.min(centerX, centerY) * 0.8;
-    };
-    
-    // Initialize dimensions
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    
-    // Helper to calculate distance from center
-    const getDistance = (x, y) => {
-      return Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-    };
     
     // Function to send joystick data with throttling
     const sendJoystickData = (x, y, force = false) => {
@@ -635,27 +633,39 @@ class ESP32RobotCard extends LitElement {
       }
     };
     
-    // Function to move joystick
-    const moveJoystick = (clientX, clientY) => {
-      const rect = joystickContainer.getBoundingClientRect();
-      let x = clientX - rect.left;
-      let y = clientY - rect.top;
+    // Function to handle joystick movement
+    const handleJoystickMove = (event) => {
+      if (!isDragging) return;
       
-      // Limit to circle
-      const distance = getDistance(x, y);
-      if (distance > limitRadius) {
-        const angle = Math.atan2(y - centerY, x - centerX);
-        x = centerX + limitRadius * Math.cos(angle);
-        y = centerY + limitRadius * Math.sin(angle);
+      const rect = joystickContainer.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      // Get touch or mouse position
+      const clientX = event.clientX || event.touches[0].clientX;
+      const clientY = event.clientY || event.touches[0].clientY;
+      
+      // Calculate relative position from center
+      let x = clientX - rect.left - centerX;
+      let y = clientY - rect.top - centerY;
+      
+      // Calculate the maximum offset based on container size and stick size
+      const maxOffset = rect.width / 2 - joystickHandle.offsetWidth / 2;
+      
+      // Limit to circle boundary
+      const distance = Math.sqrt(x * x + y * y);
+      if (distance > maxOffset) {
+        const angle = Math.atan2(y, x);
+        x = maxOffset * Math.cos(angle);
+        y = maxOffset * Math.sin(angle);
       }
       
-      // Update joystick position
-      joystickHandle.style.left = `${x}px`;
-      joystickHandle.style.top = `${y}px`;
+      // Update joystick position - use transform for better performance and centering
+      joystickHandle.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
       
-      // Calculate control values (float values from -1 to 1)
-      const normalizedX = ((x - centerX) / limitRadius);
-      const normalizedY = ((y - centerY) / limitRadius) * -1; // Invert Y for traditional control scheme
+      // Calculate normalized values (-1 to 1)
+      const normalizedX = (x / maxOffset);
+      const normalizedY = (-y / maxOffset); // Invert Y for traditional control scheme
       
       // Only send if values changed significantly
       if (Math.abs(normalizedX - currentX) > 0.05 || Math.abs(normalizedY - currentY) > 0.05) {
@@ -668,8 +678,6 @@ class ESP32RobotCard extends LitElement {
     // Function to reset joystick
     const resetJoystick = (sendData = true) => {
       isDragging = false;
-      joystickHandle.style.left = '50%';
-      joystickHandle.style.top = '50%';
       joystickHandle.style.transform = 'translate(-50%, -50%)';
       
       // Send stop command
@@ -703,55 +711,61 @@ class ESP32RobotCard extends LitElement {
       }
     };
     
-    // Mouse events
-    joystickContainer.addEventListener('mousedown', (e) => {
+    // Mouse events for joystick - start dragging on the joystick handle
+    joystickHandle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       isDragging = true;
-      joystickHandle.style.transform = 'none';
-      moveJoystick(e.clientX, e.clientY);
+    });
+    
+    // Also allow starting drag from anywhere in the joystick container
+    joystickContainer.addEventListener('mousedown', (e) => {
+      if (e.target !== joystickHandle) {
+        e.preventDefault();
+        isDragging = true;
+        handleJoystickMove(e);
+      }
     });
     
     document.addEventListener('mousemove', (e) => {
       e.preventDefault();
-      if (isDragging) {
-        moveJoystick(e.clientX, e.clientY);
-      }
+      handleJoystickMove(e);
     });
     
     document.addEventListener('mouseup', (e) => {
       e.preventDefault();
-      if (isDragging) {
-        resetJoystick(true);
-      }
+      resetJoystick(true);
     });
     
-    // Touch events
-    joystickContainer.addEventListener('touchstart', (e) => {
+    // Touch events for joystick
+    joystickHandle.addEventListener('touchstart', (e) => {
       e.preventDefault();
       isDragging = true;
-      joystickHandle.style.transform = 'none';
-      moveJoystick(e.touches[0].clientX, e.touches[0].clientY);
+      handleJoystickMove(e.touches[0]);
+    }, { passive: false });
+    
+    joystickContainer.addEventListener('touchstart', (e) => {
+      if (e.target !== joystickHandle) {
+        e.preventDefault();
+        isDragging = true;
+        handleJoystickMove(e);
+      }
     }, { passive: false });
     
     document.addEventListener('touchmove', (e) => {
       e.preventDefault();
       if (isDragging && e.touches.length > 0) {
-        moveJoystick(e.touches[0].clientX, e.touches[0].clientY);
+        handleJoystickMove(e);
       }
     }, { passive: false });
     
     document.addEventListener('touchend', (e) => {
       e.preventDefault();
-      if (isDragging) {
-        resetJoystick(true);
-      }
+      resetJoystick(true);
     }, { passive: false });
     
     document.addEventListener('touchcancel', (e) => {
       e.preventDefault();
-      if (isDragging) {
-        resetJoystick(true);
-      }
+      resetJoystick(true);
     }, { passive: false });
     
     // Prevent zoom/scrolling on mobile devices
