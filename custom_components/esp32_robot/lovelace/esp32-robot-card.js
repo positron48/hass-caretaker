@@ -136,7 +136,7 @@ class ESP32RobotCard extends LitElement {
         width: 36px;
         padding: 0;
         margin-left: 8px;
-        margin-right: 8px;
+        margin-right: 16px;
         font-size: 18px;
         font-weight: 500;
         cursor: pointer;
@@ -260,7 +260,7 @@ class ESP32RobotCard extends LitElement {
             title="Control Interface"
           >
             <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9S16.97,3,12,3z M12,7c1.65,0,3,1.35,3,3s-1.35,3-3,3 s-3-1.35-3-3S10.35,7,12,7z M12,18.9c-2.48,0-4.71-1.18-6.14-3c0.68-1.35,2.31-2.25,4.14-2.25h4c1.83,0,3.46,0.9,4.14,2.25 C16.71,17.72,14.48,18.9,12,18.9z"/>
+              <path d="M17,5H7A5,5,0,0,0,2,10v9H22V10A5,5,0,0,0,17,5ZM8,16a2,2,0,1,1,2-2A2,2,0,0,1,8,16Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,16,16ZM7,8H17a2,2,0,0,1,2,2v2H5V10A2,2,0,0,1,7,8Z"/>
             </svg>
           </button>
         </div>
@@ -320,7 +320,7 @@ class ESP32RobotCard extends LitElement {
     videoContainer.style.height = '100%';
     videoContainer.style.zIndex = '1';
     videoContainer.style.backgroundColor = '#000';
-    
+
     // Loading indicator
     const loadingEl = document.createElement('div');
     loadingEl.textContent = 'Click Start Stream button';
@@ -980,7 +980,7 @@ class ESP32RobotCard extends LitElement {
           if (data.fps !== undefined) {
             fpsStatus.textContent = `FPS: ${data.fps.toFixed(1)}`;
             fpsStatus.style.display = 'block';
-          } else {
+        } else {
             fpsStatus.textContent = 'FPS: --';
           }
         } else {
@@ -1119,7 +1119,7 @@ class ESP32RobotCard extends LitElement {
     joystickContainer.addEventListener('mousedown', (e) => {
       if (e.target !== joystickHandle) {
         e.preventDefault();
-        isDragging = true;
+      isDragging = true;
         handleJoystickMove(e);
       }
     });
@@ -1143,14 +1143,14 @@ class ESP32RobotCard extends LitElement {
     
     joystickContainer.addEventListener('touchstart', (e) => {
       if (e.target !== joystickHandle) {
-        e.preventDefault();
+      e.preventDefault();
         isDragging = true;
         handleJoystickMove(e);
       }
     }, { passive: false });
     
     document.addEventListener('touchmove', (e) => {
-      e.preventDefault();
+        e.preventDefault();
       if (isDragging && e.touches.length > 0) {
         handleJoystickMove(e);
       }
@@ -1230,14 +1230,14 @@ class ESP32RobotCard extends LitElement {
         // Выход из полноэкранного режима
         try {
           if (document.exitFullscreen) {
-            document.exitFullscreen();
+        document.exitFullscreen();
           } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
           } else if (document.mozCancelFullScreen) {
             document.mozCancelFullScreen();
           } else if (document.msExitFullscreen) {
             document.msExitFullscreen();
-          } else {
+      } else {
             console.warn('Fullscreen API not supported by this browser');
           }
         } catch (error) {
