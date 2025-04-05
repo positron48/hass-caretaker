@@ -1,106 +1,85 @@
-# ESP32 Robot Integration for Home Assistant
+# ESP32 Robot for Home Assistant
 
-Эта интеграция позволяет мониторить статус ESP32-роботов в вашей системе Home Assistant и отображать информацию на панели Lovelace.
+This integration allows you to monitor and control your ESP32-based robots through Home Assistant.
 
-## Возможности
+## Features
 
-- Мониторинг статуса робота в реальном времени (онлайн/оффлайн)
-- Отображение информации о стриминге и FPS
-- Пользовательская карточка Lovelace для удобного отображения
-- Настраиваемый интервал обновления данных
+- Monitor robot status (online/offline)
+- View camera stream from robot with secure authentication
+- Control robot movement through intuitive UI
+- Secure video streaming with signed URLs
+- Native Home Assistant Lovelace card
 
-## Установка
+## Security Features
 
-1. Скопируйте папку `esp32_robot` в директорию `custom_components` вашего Home Assistant.
-2. Перезапустите Home Assistant.
-3. Добавьте интеграцию через UI (Настройки > Интеграции > Добавить интеграцию).
+### Secure Streaming
 
-## Настройка
+The ESP32 Robot integration implements secure video streaming using Home Assistant's signed URL feature. This ensures that:
 
-1. Введите IP-адрес вашего ESP32-робота
-2. Опционально установите пользовательское имя для робота
-3. Опционально настройте интервал обновления статуса (в секундах)
+1. **Authorization Required**: All streams are protected by Home Assistant's authentication system.
+2. **Signed URLs**: The integration uses Home Assistant's WebSocket API to generate time-limited signed URLs for streams, which can be used even in contexts where standard authentication headers aren't supported (like `<img>` tags).
+3. **Limited Validity**: Signed URLs include an expiration timestamp and are validated by Home Assistant.
+4. **Proxy Protection**: All communication with your ESP32 robot goes through Home Assistant's proxy system, avoiding direct exposure of your robot's IP address to clients.
 
-## Информация о сенсоре
+This security model ensures that your robot's video stream can only be accessed by authorized users, even when embedded in cards or shared within your Home Assistant dashboard.
 
-Интеграция создаёт сенсор со следующими атрибутами:
+### Authentication Technical Details
 
-- **Состояние**: Показывает, находится ли робот в состоянии "online" или "offline"
-- **Атрибуты**:
-  - `ip_address`: IP-адрес робота
-  - `direct_url`: Прямой URL для доступа к интерфейсу робота
-  - `fps`: Текущий FPS камеры (если робот онлайн и стримит)
-  - `streaming`: Статус стриминга (если робот онлайн)
-  - `last_error`: Информация о последней ошибке (только если робот онлайн)
+The integration uses Home Assistant's built-in WebSocket API for generating signed URLs:
 
-## Карточка Lovelace
+1. When a user requests to view the stream, the frontend sends a WebSocket message to get a signed URL:
+   ```javascript
+   const result = await this._hass.connection.sendMessagePromise({
+     type: "auth/sign_path",
+     path: `/api/esp32_robot/proxy/${robotId}/stream`,
+     expires: 300 // 5 minutes
+   });
+   ```
 
-Интеграция включает пользовательскую карточку Lovelace для отображения статуса робота.
+2. Home Assistant returns a signed URL that includes an `authSig` parameter containing a JWT token.
 
-### Автоматическая установка
+3. The signed URL is used directly in the `<img>` tag to display the stream:
+   ```javascript
+   videoImg.src = this._hass.hassUrl(signedUrl);
+   ```
 
-После установки и настройки интеграции, карточка будет автоматически зарегистрирована в Home Assistant и доступна для добавления на панель Lovelace.
+4. When the browser requests the image, Home Assistant validates the `authSig` parameter before proxying the request to the robot.
 
-### Добавление карточки на панель
+5. Authentication is only checked at the beginning of the MJPEG stream, after which the stream continues until closed.
 
-1. Перейдите на панель Lovelace
-2. Нажмите кнопку редактирования (три точки в правом верхнем углу)
-3. Выберите "Добавить карточку"
-4. Найдите "ESP32 Robot Card" в списке или выберите "Пользовательская" и введите следующую конфигурацию:
+## Usage
 
-```yaml
-type: 'custom:esp32-robot-card'
-entity: sensor.esp32_robot_status
-title: 'Мой робот'
-```
+### Viewing Stream
 
-### Внешний вид карточки
+The stream is securely displayed in the control interface that opens when you click the "Control Interface" button on the ESP32 Robot card. The stream is loaded using a secure signed URL that doesn't require you to expose your robot directly to the internet.
 
-Карточка показывает:
-- Статус робота (онлайн/оффлайн) с соответствующей иконкой
-- IP-адрес робота (если онлайн)
-- Статус стриминга (если робот онлайн)
-- FPS видеопотока (если робот онлайн и стримит)
+### MJPEG Streaming Performance
 
-Для улучшения пользовательского опыта, ошибки подключения не отображаются, когда робот оффлайн, чтобы не загромождать интерфейс технической информацией.
+The implementation includes several optimizations for MJPEG streaming:
 
-## Техническая информация
+1. **No Timeout**: Long-running MJPEG streams are configured to run without a timeout.
+2. **Buffer Size Optimization**: Uses an optimized buffer size (4096 bytes) for better performance.
+3. **Error Handling**: Comprehensive error handling for network issues, disconnections, and other stream problems.
+4. **Connection Management**: Proper management of connections to avoid resource leaks.
 
-### API робота
+## Troubleshooting
 
-Интеграция периодически запрашивает эндпоинт `/status` на вашем ESP32-роботе. Этот эндпоинт должен возвращать JSON-ответ примерно такого формата:
+### Stream Not Loading
 
-```json
-{
-  "streaming": true,
-  "fps": 25
-}
-```
+If the stream isn't loading, check:
 
-### Обработка ошибок
+1. The robot is online (check the status on the card)
+2. Your Home Assistant instance can reach the robot's IP address
+3. The robot's stream endpoint is functioning properly
 
-- Таймауты соединения и ошибки сети интерпретируются как статус "offline"
-- Невалидный JSON считается как статус "offline"
-- Ошибки HTTP считаются как статус "offline"
-- Информация об ошибках сохраняется, но отображается только когда робот онлайн
+### Security Issues
 
-## Решение проблем
+If you're having issues with stream authentication:
 
-Если у вас возникли проблемы с интеграцией:
+1. Check that your Home Assistant authentication is working properly
+2. Verify that the robot is online and accessible
+3. Check the browser console for any errors related to image loading
 
-1. Убедитесь, что робот включен и подключен к вашей сети
-2. Проверьте, что IP-адрес указан правильно
-3. Проверьте логи Home Assistant на наличие ошибок
-4. Попробуйте увеличить интервал сканирования, если робот не успевает отвечать
-5. Убедитесь, что эндпоинт `/status` на роботе работает корректно
+## Advanced Configuration
 
-## Совместимость
-
-- Требуется Home Assistant 2023.3.0 или новее
-- Робот должен иметь эндпоинт `/status`, возвращающий JSON-данные
-- Поддерживаются все темы Home Assistant
-- Корректно работает в мобильном приложении 
-
-## Технические детали
-
-Детали реализации описаны в [architecture.md](architecture.md).
+The integration automatically manages secure streaming. No additional configuration is needed for standard usage. 

@@ -597,7 +597,10 @@ class ESP32RobotCard extends LitElement {
     const baseControlUrl = `/api/esp32_robot/proxy/${entityId}/control`;
     let isDragging = false;
     let centerX, centerY, limitRadius;
-    let lastX = 0, lastY = 0;
+    let currentX = 0, currentY = 0;
+    let lastJoystickSendTime = 0;
+    let pendingJoystickSend = null;
+    const THROTTLE_MS = 100; // Throttle sending commands to 10 times per second
     
     // Calculate joystick boundaries
     const updateDimensions = () => {
@@ -614,6 +617,31 @@ class ESP32RobotCard extends LitElement {
     // Helper to calculate distance from center
     const getDistance = (x, y) => {
       return Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+    };
+    
+    // Function to send joystick data with throttling
+    const sendJoystickData = (x, y, force = false) => {
+      const now = Date.now();
+      
+      // Clear any pending timeout
+      if (pendingJoystickSend) {
+        clearTimeout(pendingJoystickSend.timeout);
+      }
+      
+      // If forced or enough time has passed, send immediately
+      if (force || now - lastJoystickSendTime >= THROTTLE_MS) {
+        this._sendControlCommand(baseControlUrl, x, y);
+        lastJoystickSendTime = now;
+        pendingJoystickSend = null;
+      } else {
+        // Schedule to send at next available time
+        pendingJoystickSend = {
+          data: { x, y },
+          timeout: setTimeout(() => {
+            sendJoystickData(x, y, true);
+          }, THROTTLE_MS - (now - lastJoystickSendTime))
+        };
+      }
     };
     
     // Function to move joystick
@@ -638,34 +666,44 @@ class ESP32RobotCard extends LitElement {
       const normalizedX = Math.round(((x - centerX) / limitRadius) * 100);
       const normalizedY = Math.round(((y - centerY) / limitRadius) * -100); // Invert Y
       
-      // Only send control if values changed significantly
-      if (Math.abs(normalizedX - lastX) > 5 || Math.abs(normalizedY - lastY) > 5) {
-        lastX = normalizedX;
-        lastY = normalizedY;
-        this._sendControlCommand(baseControlUrl, normalizedX, normalizedY);
+      // Only send if values changed significantly
+      if (Math.abs(normalizedX - currentX) > 5 || Math.abs(normalizedY - currentY) > 5) {
+        currentX = normalizedX;
+        currentY = normalizedY;
+        sendJoystickData(normalizedX, normalizedY);
       }
     };
     
     // Function to reset joystick
-    const resetJoystick = () => {
+    const resetJoystick = (sendData = true) => {
+      isDragging = false;
       joystickHandle.style.left = '50%';
       joystickHandle.style.top = '50%';
       joystickHandle.style.transform = 'translate(-50%, -50%)';
       
       // Send stop command
-      if (lastX !== 0 || lastY !== 0) {
-        lastX = 0;
-        lastY = 0;
-        this._sendControlCommand(baseControlUrl, 0, 0);
+      if (sendData && (currentX !== 0 || currentY !== 0)) {
+        currentX = 0;
+        currentY = 0;
+        sendJoystickData(0, 0, true);
       }
     };
     
     // Function to send control command
     this._sendControlCommand = async (url, x, y) => {
       try {
-        const response = await this._hass.fetchWithAuth(`${url}?x=${x}&y=${y}`, {
-          method: 'POST'
+        const response = await this._hass.fetchWithAuth(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            mode: 'joystick',
+            x: x,
+            y: y
+          })
         });
+        
         if (!response.ok) {
           console.error('Control error:', response.status);
         }
@@ -676,45 +714,67 @@ class ESP32RobotCard extends LitElement {
     
     // Mouse events
     joystickContainer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
       isDragging = true;
       joystickHandle.style.transform = 'none';
       moveJoystick(e.clientX, e.clientY);
     });
     
     document.addEventListener('mousemove', (e) => {
+      e.preventDefault();
       if (isDragging) {
         moveJoystick(e.clientX, e.clientY);
       }
     });
     
-    document.addEventListener('mouseup', () => {
+    document.addEventListener('mouseup', (e) => {
+      e.preventDefault();
       if (isDragging) {
-        isDragging = false;
-        resetJoystick();
+        resetJoystick(true);
       }
     });
     
     // Touch events
     joystickContainer.addEventListener('touchstart', (e) => {
+      e.preventDefault();
       isDragging = true;
       joystickHandle.style.transform = 'none';
       moveJoystick(e.touches[0].clientX, e.touches[0].clientY);
-      e.preventDefault();
     }, { passive: false });
     
     document.addEventListener('touchmove', (e) => {
-      if (isDragging) {
+      e.preventDefault();
+      if (isDragging && e.touches.length > 0) {
         moveJoystick(e.touches[0].clientX, e.touches[0].clientY);
-        e.preventDefault();
       }
     }, { passive: false });
     
-    document.addEventListener('touchend', () => {
+    document.addEventListener('touchend', (e) => {
+      e.preventDefault();
       if (isDragging) {
-        isDragging = false;
-        resetJoystick();
+        resetJoystick(true);
       }
-    });
+    }, { passive: false });
+    
+    document.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      if (isDragging) {
+        resetJoystick(true);
+      }
+    }, { passive: false });
+    
+    // Prevent zoom/scrolling on mobile devices
+    document.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+    }, { passive: false });
+    
+    document.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+    }, { passive: false });
+    
+    document.addEventListener('gestureend', (e) => {
+      e.preventDefault();
+    }, { passive: false });
   }
   
   _initializeFullscreen(fullscreenButton, dialog) {
