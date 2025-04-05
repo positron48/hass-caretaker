@@ -442,31 +442,6 @@ class ESP32RobotCard extends LitElement {
       document.body.removeChild(dialog);
     });
     
-    // Fullscreen button (in top-right corner)
-    const fullscreenButton = document.createElement('button');
-    fullscreenButton.className = 'button icon-button';
-    fullscreenButton.title = 'Fullscreen';
-    fullscreenButton.style.position = 'absolute';
-    fullscreenButton.style.top = '20px';
-    fullscreenButton.style.right = '80px'; // Теперь кнопка полноэкранного режима левее крестика
-    fullscreenButton.style.zIndex = '10';
-    fullscreenButton.style.pointerEvents = 'all';
-    fullscreenButton.style.background = 'rgba(0, 0, 0, 0.5)';
-    fullscreenButton.style.padding = '10px';
-    fullscreenButton.style.borderRadius = '8px';
-    fullscreenButton.style.backdropFilter = 'blur(5px)';
-    fullscreenButton.style.minWidth = '44px';
-    fullscreenButton.style.minHeight = '44px';
-    fullscreenButton.style.border = 'none';
-    fullscreenButton.style.cursor = 'pointer';
-    fullscreenButton.style.fontSize = '14px';
-    fullscreenButton.style.color = 'white';
-    fullscreenButton.style.transition = 'all 0.3s';
-    fullscreenButton.style.display = 'flex';
-    fullscreenButton.style.alignItems = 'center';
-    fullscreenButton.style.justifyContent = 'center';
-    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>'; // Используем символ из скриншота
-    
     // Settings panel
     const settingsPanel = document.createElement('div');
     settingsPanel.style.position = 'fixed';
@@ -757,7 +732,6 @@ class ESP32RobotCard extends LitElement {
     controlsOverlay.appendChild(controlsTop);
     controlsOverlay.appendChild(controlsRight);
     controlsOverlay.appendChild(closeButton);
-    controlsOverlay.appendChild(fullscreenButton);
     controlsOverlay.appendChild(fpsStatus);
     
     container.appendChild(videoContainer);
@@ -822,7 +796,6 @@ class ESP32RobotCard extends LitElement {
     // Initialize functionality
     this._initializeStreaming(entityId, videoImg, loadingEl, streamToggle, fpsStatus);
     this._initializeJoystick(entityId, joystickContainer, joystickHandle);
-    this._initializeFullscreen(fullscreenButton, dialog);
     this._initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue);
   }
   
@@ -1179,82 +1152,7 @@ class ESP32RobotCard extends LitElement {
       e.preventDefault();
     }, { passive: false });
   }
-  
-  _initializeFullscreen(fullscreenButton, dialog) {
-    // Используем прямой подход к API полноэкранного режима для window/document
-    
-    // Обновляем иконку в зависимости от текущего состояния
-    const updateIcon = () => {
-      const isFullscreen = !!(
-        document.fullscreenElement || 
-        document.webkitFullscreenElement || 
-        document.mozFullScreenElement || 
-        document.msFullscreenElement
-      );
-      
-      fullscreenButton.innerHTML = isFullscreen 
-        ? '<span style="font-size: 20px;">□</span>' 
-        : '<span style="font-size: 20px;">⧉</span>';
-    };
-    
-    // Начальная установка иконки
-    updateIcon();
-    
-    // Обработчик клика по кнопке
-    fullscreenButton.addEventListener('click', () => {
-      const isFullscreen = !!(
-        document.fullscreenElement || 
-        document.webkitFullscreenElement || 
-        document.mozFullScreenElement || 
-        document.msFullscreenElement
-      );
-      
-      if (!isFullscreen) {
-        // Переход в полноэкранный режим
-        try {
-          if (document.documentElement.requestFullscreen) {
-            document.documentElement.requestFullscreen();
-          } else if (document.documentElement.webkitRequestFullscreen) {
-            document.documentElement.webkitRequestFullscreen();
-          } else if (document.documentElement.mozRequestFullScreen) {
-            document.documentElement.mozRequestFullScreen();
-          } else if (document.documentElement.msRequestFullscreen) {
-            document.documentElement.msRequestFullscreen();
-          } else {
-            console.warn('Fullscreen API not supported by this browser');
-          }
-        } catch (error) {
-          console.error('Error entering fullscreen mode:', error);
-        }
-      } else {
-        // Выход из полноэкранного режима
-        try {
-          if (document.exitFullscreen) {
-        document.exitFullscreen();
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-      } else {
-            console.warn('Fullscreen API not supported by this browser');
-          }
-        } catch (error) {
-          console.error('Error exiting fullscreen mode:', error);
-        }
-      }
-      
-      // Обновляем иконку после переключения
-      setTimeout(updateIcon, 100);
-    });
-    
-    // Обработчики событий изменения полноэкранного режима для всех браузеров
-    document.addEventListener('fullscreenchange', updateIcon);
-    document.addEventListener('webkitfullscreenchange', updateIcon);
-    document.addEventListener('mozfullscreenchange', updateIcon);
-    document.addEventListener('MSFullscreenChange', updateIcon);
-  }
+
 
   // Add new method to initialize camera settings
   _initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue) {

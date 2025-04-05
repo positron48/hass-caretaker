@@ -6,9 +6,23 @@ This integration allows you to monitor and control your ESP32-based robots throu
 
 - Monitor robot status (online/offline)
 - View camera stream from robot with secure authentication
-- Control robot movement through intuitive UI
+- Control robot movement through intuitive joystick interface
+- Adjust camera settings (resolution, quality) and LED brightness
 - Secure video streaming with signed URLs
 - Native Home Assistant Lovelace card
+- Full screen mode support
+
+## Control Interface
+
+The ESP32 Robot card provides a modern and intuitive control interface:
+
+- **Immersive Video Stream**: Full screen video display with overlay controls
+- **Responsive Joystick**: Precision control with normalized -1 to 1 float values for smooth robot movement
+- **Settings Panel**: Slide-out panel to adjust:
+  - Camera resolution with multiple preset options
+  - Image quality slider (8-64) with visual feedback
+  - LED brightness control (0-100%)
+- **FPS Display**: Real-time frames-per-second counter with one decimal place precision
 
 ## Security Features
 
@@ -53,6 +67,21 @@ The integration uses Home Assistant's built-in WebSocket API for generating sign
 
 The stream is securely displayed in the control interface that opens when you click the "Control Interface" button on the ESP32 Robot card. The stream is loaded using a secure signed URL that doesn't require you to expose your robot directly to the internet.
 
+### Joystick Control
+
+The integrated joystick provides intuitive control of your robot:
+- Click anywhere in the joystick area to position the handle
+- Drag the handle to steer your robot
+- Release to automatically center the joystick and stop movement
+- Smooth, normalized values (-1 to 1) for precise control
+
+### Camera Settings
+
+Adjust camera settings through the slide-out settings panel:
+- **Resolution**: Select from multiple preset resolutions (QQVGA to UXGA)
+- **Quality**: Adjust image compression with real-time feedback
+- **LED Control**: Set LED brightness from 0-100%
+
 ### MJPEG Streaming Performance
 
 The implementation includes several optimizations for MJPEG streaming:
@@ -61,6 +90,7 @@ The implementation includes several optimizations for MJPEG streaming:
 2. **Buffer Size Optimization**: Uses an optimized buffer size (4096 bytes) for better performance.
 3. **Error Handling**: Comprehensive error handling for network issues, disconnections, and other stream problems.
 4. **Connection Management**: Proper management of connections to avoid resource leaks.
+5. **FPS Monitoring**: Real-time FPS display with one decimal place precision.
 
 ## Troubleshooting
 
@@ -71,6 +101,15 @@ If the stream isn't loading, check:
 1. The robot is online (check the status on the card)
 2. Your Home Assistant instance can reach the robot's IP address
 3. The robot's stream endpoint is functioning properly
+4. Click the "Start Stream" button in the control interface
+
+### Joystick Issues
+
+If the joystick isn't responding properly:
+
+1. Ensure the robot is online
+2. Check browser console for any errors
+3. Try using a different browser if touch controls are not working
 
 ### Security Issues
 
