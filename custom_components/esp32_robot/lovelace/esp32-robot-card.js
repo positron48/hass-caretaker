@@ -440,12 +440,34 @@ class ESP32RobotCard extends LitElement {
     
     const resolutionSelect = document.createElement('select');
     resolutionSelect.id = 'resolution-select';
-    resolutionSelect.style.background = 'rgba(255, 255, 255, 0.1)';
+    resolutionSelect.style.background = '#1e1e1e';
     resolutionSelect.style.border = '1px solid rgba(255, 255, 255, 0.2)';
     resolutionSelect.style.color = 'white';
     resolutionSelect.style.padding = '6px 10px';
     resolutionSelect.style.borderRadius = '4px';
     resolutionSelect.style.width = '100%';
+    resolutionSelect.style.height = '36px';
+    resolutionSelect.style.fontSize = '14px';
+    resolutionSelect.style.appearance = 'menulist'; // Ensure dropdown arrow is visible
+    resolutionSelect.style.cursor = 'pointer';
+    
+    // Add styles for the select options
+    const selectStyle = document.createElement('style');
+    selectStyle.textContent = `
+      #resolution-select option {
+        background-color: #1e1e1e;
+        color: white;
+        padding: 8px;
+        font-size: 14px;
+      }
+      
+      #resolution-select option:hover,
+      #resolution-select option:focus,
+      #resolution-select option:active {
+        background-color: #0078d7;
+      }
+    `;
+    document.head.appendChild(selectStyle);
     
     // Resolution options
     const resolutions = [
@@ -537,9 +559,11 @@ class ESP32RobotCard extends LitElement {
     const qualityValue = document.createElement('div');
     qualityValue.textContent = '12 (Higher quality)';
     qualityValue.style.textAlign = 'center';
-    qualityValue.style.marginTop = '5px';
-    qualityValue.style.fontSize = '12px';
-    qualityValue.style.opacity = '0.7';
+    qualityValue.style.marginTop = '8px';
+    qualityValue.style.fontSize = '14px';
+    qualityValue.style.opacity = '1';
+    qualityValue.style.color = 'white';
+    qualityValue.style.fontWeight = '500';
     qualityValue.id = 'quality-value';
     
     qualitySliderContainer.appendChild(qualitySlider);
@@ -571,9 +595,11 @@ class ESP32RobotCard extends LitElement {
     const ledValue = document.createElement('div');
     ledValue.textContent = 'LED: Off';
     ledValue.style.textAlign = 'center';
-    ledValue.style.marginTop = '5px';
-    ledValue.style.fontSize = '12px';
-    ledValue.style.opacity = '0.7';
+    ledValue.style.marginTop = '8px';
+    ledValue.style.fontSize = '14px';
+    ledValue.style.opacity = '1';
+    ledValue.style.color = 'white';
+    ledValue.style.fontWeight = '500';
     ledValue.id = 'led-value';
     
     ledSliderContainer.appendChild(ledSlider);
@@ -687,7 +713,10 @@ class ESP32RobotCard extends LitElement {
     qualitySlider.addEventListener('input', function() {
       const value = this.value;
       qualityValue.textContent = value + (value < 30 ? " (Higher quality)" : " (Lower quality)");
-    });
+      
+      // Отправляем настройки в реальном времени при перетаскивании
+      this._sendQualitySettingsThrottled(entityId, resolutionSelect.value, value);
+    }.bind(this));
 
     // Add event listeners for quality and resolution settings
     qualitySlider.addEventListener('change', () => {
@@ -702,7 +731,10 @@ class ESP32RobotCard extends LitElement {
     ledSlider.addEventListener('input', function() {
       const value = parseInt(this.value);
       ledValue.textContent = value === 0 ? "LED: Off" : `LED: ${value}%`;
-    });
+      
+      // Отправляем настройки в реальном времени при перетаскивании
+      this._sendLedSettingThrottled(entityId, value);
+    }.bind(this));
 
     ledSlider.addEventListener('change', () => {
       this._sendLedSetting(entityId, ledSlider.value);
@@ -1122,6 +1154,31 @@ class ESP32RobotCard extends LitElement {
     .catch(error => {
       console.error('Failed to control LED:', error);
     });
+  }
+
+  // Добавляем методы для дросселирования отправки настроек при перетаскивании слайдера
+  _sendQualitySettingsThrottled(entityId, resolution, quality) {
+    // Отменяем предыдущий таймаут, если он был
+    if (this._qualityThrottleTimeout) {
+      clearTimeout(this._qualityThrottleTimeout);
+    }
+    
+    // Устанавливаем новый таймаут для отправки настроек
+    this._qualityThrottleTimeout = setTimeout(() => {
+      this._sendQualitySettings(entityId, resolution, quality);
+    }, 100); // 100ms задержка между обновлениями
+  }
+  
+  _sendLedSettingThrottled(entityId, brightness) {
+    // Отменяем предыдущий таймаут, если он был
+    if (this._ledThrottleTimeout) {
+      clearTimeout(this._ledThrottleTimeout);
+    }
+    
+    // Устанавливаем новый таймаут для отправки настроек
+    this._ledThrottleTimeout = setTimeout(() => {
+      this._sendLedSetting(entityId, brightness);
+    }, 100); // 100ms задержка между обновлениями
   }
 }
 
