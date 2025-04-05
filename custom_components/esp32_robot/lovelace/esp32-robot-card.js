@@ -222,43 +222,6 @@ class ESP32RobotCard extends LitElement {
     dialog.style.display = 'flex';
     dialog.style.flexDirection = 'column';
 
-    // Create header with title and close button
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.padding = '16px';
-    header.style.position = 'absolute';
-    header.style.top = '0';
-    header.style.left = '0';
-    header.style.right = '0';
-    header.style.zIndex = '10';
-    header.style.background = 'rgba(0, 0, 0, 0.5)';
-    header.style.backdropFilter = 'blur(5px)';
-    
-    const headerTitle = document.createElement('h2');
-    headerTitle.textContent = title;
-    headerTitle.style.margin = '0';
-    headerTitle.style.fontSize = '18px';
-    headerTitle.style.fontWeight = '500';
-    
-    const closeButton = document.createElement('button');
-    closeButton.innerHTML = '&times;';
-    closeButton.style.background = 'transparent';
-    closeButton.style.border = 'none';
-    closeButton.style.color = 'var(--primary-text-color, #fff)';
-    closeButton.style.fontSize = '24px';
-    closeButton.style.cursor = 'pointer';
-    closeButton.style.padding = '4px 8px';
-    closeButton.addEventListener('click', () => {
-      this._stopStream();
-      dialog.close();
-      document.body.removeChild(dialog);
-    });
-    
-    header.appendChild(headerTitle);
-    header.appendChild(closeButton);
-
     // Container with overlay structure like in original design
     const container = document.createElement('div');
     container.style.position = 'relative';
@@ -346,6 +309,36 @@ class ESP32RobotCard extends LitElement {
     streamToggle.id = 'stream-button';
     controlsTop.appendChild(streamToggle);
     
+    // Close button in top-right corner
+    const closeButton = document.createElement('button');
+    closeButton.className = 'button icon-button';
+    closeButton.title = 'Close';
+    closeButton.style.position = 'absolute';
+    closeButton.style.top = '20px';
+    closeButton.style.right = '80px'; // Place to the left of fullscreen button
+    closeButton.style.zIndex = '10';
+    closeButton.style.pointerEvents = 'all';
+    closeButton.style.background = 'rgba(0, 0, 0, 0.5)';
+    closeButton.style.padding = '10px';
+    closeButton.style.borderRadius = '8px';
+    closeButton.style.backdropFilter = 'blur(5px)';
+    closeButton.style.minWidth = '44px';
+    closeButton.style.minHeight = '44px';
+    closeButton.style.border = 'none';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.fontSize = '14px';
+    closeButton.style.color = 'white';
+    closeButton.style.transition = 'all 0.3s';
+    closeButton.style.display = 'flex';
+    closeButton.style.alignItems = 'center';
+    closeButton.style.justifyContent = 'center';
+    closeButton.innerHTML = '<span style="font-size: 20px;">&times;</span>';
+    closeButton.addEventListener('click', () => {
+      this._stopStream();
+      dialog.close();
+      document.body.removeChild(dialog);
+    });
+    
     // Fullscreen button (in top-right corner)
     const fullscreenButton = document.createElement('button');
     fullscreenButton.className = 'button icon-button';
@@ -429,14 +422,14 @@ class ESP32RobotCard extends LitElement {
     // Add all elements to the container
     controlsOverlay.appendChild(controlsTop);
     controlsOverlay.appendChild(controlsRight);
+    controlsOverlay.appendChild(closeButton);
     controlsOverlay.appendChild(fullscreenButton);
     controlsOverlay.appendChild(fpsStatus);
     
     container.appendChild(videoContainer);
     container.appendChild(controlsOverlay);
     
-    // Add elements to the dialog
-    dialog.appendChild(header);
+    // Add container to the dialog
     dialog.appendChild(container);
 
     // Add dialog to the document
