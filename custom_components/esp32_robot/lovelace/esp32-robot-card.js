@@ -161,8 +161,6 @@ class ESP32RobotCard extends LitElement {
     const statusColor = isOnline ? 'var(--success-color, #4CAF50)' : 'var(--error-color, #F44336)';
     const status = isOnline ? 'Online' : 'Offline';
     const ipAddress = this._entity.attributes.ip_address || '';
-    const fps = this._entity.attributes.fps !== undefined ? this._entity.attributes.fps : '';
-    const streaming = this._entity.attributes.streaming !== undefined ? this._entity.attributes.streaming : '';
 
     return html`
       <ha-card header="${this._config.title || 'ESP32 Robot'}">
@@ -177,18 +175,6 @@ class ESP32RobotCard extends LitElement {
               <div>IP:</div>
               <div>${ipAddress}</div>
             </div>
-            ${isOnline && fps ? html`
-              <div class="attribute">
-                <div>FPS:</div>
-                <div>${fps}</div>
-              </div>
-            ` : ''}
-            ${isOnline && streaming !== undefined ? html`
-              <div class="attribute">
-                <div>Streaming:</div>
-                <div>${streaming ? 'Yes' : 'No'}</div>
-              </div>
-            ` : ''}
             ${isOnline && this._entity.attributes.last_error ? html`
               <div class="error">
                 ${this._entity.attributes.last_error}
