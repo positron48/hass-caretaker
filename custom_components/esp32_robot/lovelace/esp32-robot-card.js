@@ -458,7 +458,6 @@ class ESP32RobotCard extends LitElement {
   _initializeStreaming(entityId, videoImg, loadingEl, streamButton, statusLeft, statusRight) {
     // Move isStreaming to a class property so it can be accessed by all methods
     this._isStreaming = false;
-    let signedUrlRefreshTimer = null;
     
     // Function to start streaming
     const startStream = async () => {
@@ -489,33 +488,6 @@ class ESP32RobotCard extends LitElement {
           streamButton.textContent = 'Start Stream';
         };
         
-        // Set up automatic URL refresh before expiration (refresh 10 seconds early)
-        if (signedUrlRefreshTimer) {
-          clearTimeout(signedUrlRefreshTimer);
-        }
-        
-        signedUrlRefreshTimer = setTimeout(async () => {
-          if (this._isStreaming) {
-            console.log("Refreshing signed URL before expiration");
-            try {
-              const newSignedUrl = await this._getSignedStreamUrl(entityId);
-              if (this._isStreaming) {
-                videoImg.src = this._hass.hassUrl(newSignedUrl);
-                
-                // Schedule next refresh
-                signedUrlRefreshTimer = setTimeout(async () => {
-                  if (this._isStreaming) {
-                    console.log("Refreshing signed URL again");
-                    startStream(); // Reuse the start function to refresh
-                  }
-                }, 50000); // Refresh 10 seconds before the 60-second expiration
-              }
-            } catch (error) {
-              console.error("Error refreshing signed URL:", error);
-            }
-          }
-        }, 50000); // Refresh 10 seconds before the 60-second expiration
-        
         // Poll for status updates
         this._startStatusPolling(entityId, statusLeft, statusRight);
       } catch (error) {
@@ -531,12 +503,6 @@ class ESP32RobotCard extends LitElement {
       if (this._statusInterval) {
         clearInterval(this._statusInterval);
         this._statusInterval = null;
-      }
-      
-      // Clear the URL refresh timer
-      if (signedUrlRefreshTimer) {
-        clearTimeout(signedUrlRefreshTimer);
-        signedUrlRefreshTimer = null;
       }
       
       // Send request to stop the stream on the device
@@ -569,7 +535,7 @@ class ESP32RobotCard extends LitElement {
   }
   
   // Simple promise-based function to get a signed URL
-  async _getSignedStreamUrl(robotId, expires = 60) {
+  async _getSignedStreamUrl(robotId, expires = 300) {  // Increased expiration to 5 minutes for safety
     const path = `/api/esp32_robot/proxy/${robotId}/stream`;
     
     try {
