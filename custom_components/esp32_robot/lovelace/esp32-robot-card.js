@@ -39,73 +39,133 @@ class ESP32RobotCard extends LitElement {
 
   static get styles() {
     return css`
+      ha-card {
+        position: relative;
+        overflow: hidden;
+        border-radius: var(--ha-card-border-radius, 12px);
+        box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
+        transition: box-shadow 0.3s ease;
+      }
+      
+      ha-card:hover {
+        box-shadow: var(--ha-card-box-shadow-hover, 0 3px 12px rgba(0, 0, 0, 0.25));
+      }
+
       .card-container {
         padding: 16px;
       }
+      
       .header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 16px;
       }
+      
       .header h2 {
         margin: 0;
         font-size: 1.2rem;
         font-weight: 500;
       }
+      
       .status {
         display: flex;
-        flex-direction: column;
-        margin-bottom: 16px;
+        align-items: center;
+        justify-content: center;
+        margin: 12px 0;
       }
+      
       .status-row {
         display: flex;
         justify-content: space-between;
-        padding: 4px 0;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.06));
       }
+      
       .status-label {
         font-weight: 500;
         color: var(--primary-text-color);
       }
+      
       .status-value {
         color: var(--secondary-text-color);
+        font-weight: normal;
       }
-      .status-value.online {
-        color: var(--success-color, #4CAF50);
-      }
-      .status-value.offline {
-        color: var(--error-color, #F44336);
-      }
-      .card-content {
-        padding: 16px;
-      }
-      .status {
-        display: flex;
-        align-items: center;
-        margin-bottom: 16px;
-      }
+      
       .status-icon {
-        width: 12px;
-        height: 12px;
+        min-width: 14px;
+        min-height: 14px;
+        width: 14px;
+        height: 14px;
         border-radius: 50%;
         margin-right: 8px;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 0 2px var(--card-background-color, #fff);
       }
+      
+      .status-icon.online {
+        background-color: var(--success-color, #4CAF50);
+        box-shadow: 0 0 8px var(--success-color, #4CAF50);
+      }
+      
+      .status-icon.offline {
+        background-color: var(--error-color, #F44336);
+      }
+      
       .attributes {
         margin-top: 16px;
       }
+      
       .attribute {
         display: flex;
         justify-content: space-between;
-        margin-top: 4px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.06));
       }
+      
+      .attribute:last-child {
+        border-bottom: none;
+      }
+      
+      .attribute .label {
+        font-weight: 500;
+        color: var(--primary-text-color);
+      }
+      
+      .attribute .value {
+        font-family: var(--paper-font-common-mono);
+        font-size: 14px;
+        color: var(--secondary-text-color);
+        background: var(--secondary-background-color, #f2f2f2);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      
       .control-btn {
         --mdc-theme-primary: var(--primary-color);
-        margin-top: 16px;
         width: 100%;
+        margin-top: 16px;
+        font-weight: 500;
+        text-transform: uppercase;
+        transition: all 0.2s ease-in-out;
+        border-radius: var(--ha-card-border-radius, 4px);
+        height: 46px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
+      
+      .control-btn:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        opacity: 0.9;
+      }
+      
       .error {
         color: var(--error-color);
-        margin-top: 8px;
+        margin-top: 12px;
+        padding: 8px;
+        background-color: var(--error-color, rgba(244, 67, 54, 0.1));
+        border-radius: 4px;
+        font-size: 14px;
       }
     `;
   }
@@ -149,31 +209,39 @@ class ESP32RobotCard extends LitElement {
   render() {
     if (!this._entity) {
       return html`
-        <ha-card header="ESP32 Robot">
+        <ha-card>
           <div class="card-content">
-            <div>Entity not found: ${this._config.entity}</div>
+            <div style="text-align: center; padding: 16px 0;">
+              <ha-icon icon="mdi:alert-circle-outline" style="color: var(--warning-color);"></ha-icon>
+              <div style="margin-top: 8px; color: var(--warning-color);">
+                Entity not found: ${this._config.entity}
+              </div>
+            </div>
           </div>
         </ha-card>
       `;
     }
 
     const isOnline = this._entity.state === 'online';
-    const statusColor = isOnline ? 'var(--success-color, #4CAF50)' : 'var(--error-color, #F44336)';
     const status = isOnline ? 'Online' : 'Offline';
     const ipAddress = this._entity.attributes.ip_address || '';
 
     return html`
-      <ha-card header="${this._config.title || 'ESP32 Robot'}">
+      <ha-card>
         <div class="card-content">
+          <h2 style="margin-top: 0; margin-bottom: 16px; font-weight: 500;">
+            ${this._config.title || 'ESP32 Robot'}
+          </h2>
+          
           <div class="status">
-            <div class="status-icon" style="background-color: ${statusColor}"></div>
-            <div>${status}</div>
+            <div class="status-icon ${isOnline ? 'online' : 'offline'}"></div>
+            <div style="font-weight: 500;">${status}</div>
           </div>
           
           <div class="attributes">
             <div class="attribute">
-              <div>IP:</div>
-              <div>${ipAddress}</div>
+              <div class="label">IP:</div>
+              <div class="value">${ipAddress}</div>
             </div>
             ${isOnline && this._entity.attributes.last_error ? html`
               <div class="error">
@@ -187,7 +255,9 @@ class ESP32RobotCard extends LitElement {
             raised 
             ?disabled="${!isOnline}" 
             @click="${this._openControlInterface}"
+            style="--mdc-theme-primary: ${isOnline ? 'var(--primary-color)' : 'var(--disabled-color)'}"
           >
+            <ha-icon icon="mdi:remote" style="margin-right: 8px;"></ha-icon>
             Control Interface
           </mwc-button>
         </div>
@@ -1101,6 +1171,8 @@ class ESP32RobotCard extends LitElement {
     })
     .then(response => response.json())
     .then(data => {
+      console.log('Retrieved camera settings:', data);
+      
       // Update resolution select
       if (data.resolution) {
         const option = Array.from(resolutionSelect.options).find(opt => opt.value === data.resolution);
@@ -1109,33 +1181,175 @@ class ESP32RobotCard extends LitElement {
         }
       }
       
-      // Update quality slider
-      if (data.quality) {
-        qualitySlider.value = data.quality;
-        qualityValue.textContent = data.quality + 
-          (data.quality < 30 ? " (Higher quality)" : " (Lower quality)");
+      // Update quality slider - ensure it's a valid number
+      if (data.quality !== undefined && data.quality !== null && !isNaN(data.quality)) {
+        const qualityVal = parseInt(data.quality, 10);
+        qualitySlider.value = qualityVal;
+        qualityValue.textContent = qualityVal + 
+          (qualityVal < 30 ? " (Higher quality)" : " (Lower quality)");
+      } else {
+        // Default value if invalid
+        qualitySlider.value = 12;
+        qualityValue.textContent = "12 (Higher quality)";
       }
       
-      // Set initial LED value
-      if (data.led_brightness !== undefined) {
-        const brightness = parseInt(data.led_brightness);
+      // Set initial LED value - ensure it's a valid number
+      if (data.led_brightness !== undefined && data.led_brightness !== null && !isNaN(data.led_brightness)) {
+        const brightness = parseInt(data.led_brightness, 10);
         ledSlider.value = brightness;
         ledValue.textContent = brightness === 0 ? "LED: Off" : `LED: ${brightness}%`;
+      } else {
+        // Default value if invalid
+        ledSlider.value = 0;
+        ledValue.textContent = "LED: Off";
       }
+      
+      // Set up custom dragging behavior for sliders
+      this._setupSliderDragEvents(qualitySlider, ledSlider, qualityValue, ledValue, entityId, resolutionSelect);
     })
     .catch(error => {
       console.error('Failed to get camera settings:', error);
+      
+      // Still set up drag events in case of failure
+      this._setupSliderDragEvents(qualitySlider, ledSlider, qualityValue, ledValue, entityId, resolutionSelect);
+    });
+  }
+
+  // Add a new method to set up custom slider dragging behavior
+  _setupSliderDragEvents(qualitySlider, ledSlider, qualityValue, ledValue, entityId, resolutionSelect) {
+    // Helper for handling mouse/touch dragging on sliders
+    const setupSliderDrag = (slider, valueEl, updateFn, changeFn) => {
+      let isDragging = false;
+      
+      const getValueFromEvent = (e) => {
+        const rect = slider.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        let percent = Math.max(0, Math.min(1, x / rect.width));
+        
+        const min = parseInt(slider.min, 10);
+        const max = parseInt(slider.max, 10);
+        const value = Math.round(min + percent * (max - min));
+        
+        return value;
+      };
+      
+      // Listen for mousedown/touchstart on the slider track
+      slider.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        
+        // Immediately set value based on click position
+        const value = getValueFromEvent(e);
+        slider.value = value;
+        updateFn(value);
+      });
+      
+      slider.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          e.preventDefault();
+          isDragging = true;
+          
+          // Immediately set value based on touch position
+          const value = getValueFromEvent(e);
+          slider.value = value;
+          updateFn(value);
+        }
+      }, { passive: false });
+      
+      // Handle movement during drag
+      const moveHandler = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        
+        const value = getValueFromEvent(e);
+        slider.value = value;
+        updateFn(value);
+      };
+      
+      // Listen for mousemove/touchmove on document
+      document.addEventListener('mousemove', moveHandler);
+      document.addEventListener('touchmove', moveHandler, { passive: false });
+      
+      // Listen for mouseup/touchend to end dragging
+      const endDrag = () => {
+        if (isDragging) {
+          isDragging = false;
+          changeFn(parseInt(slider.value, 10));
+        }
+      };
+      
+      document.addEventListener('mouseup', endDrag);
+      document.addEventListener('touchend', endDrag);
+      document.addEventListener('touchcancel', endDrag);
+    };
+    
+    // Set up quality slider
+    setupSliderDrag(
+      qualitySlider, 
+      qualityValue,
+      (value) => {
+        // Update the display value
+        const sanitizedValue = parseInt(value, 10);
+        qualityValue.textContent = `${sanitizedValue}${sanitizedValue < 30 ? " (Higher quality)" : " (Lower quality)"}`;
+        // Send throttled update during drag
+        this._sendQualitySettingsThrottled(entityId, resolutionSelect.value, sanitizedValue);
+      },
+      (value) => {
+        // Final update on release
+        this._sendQualitySettings(entityId, resolutionSelect.value, value);
+      }
+    );
+    
+    // Set up LED slider
+    setupSliderDrag(
+      ledSlider, 
+      ledValue,
+      (value) => {
+        // Update the display value
+        const sanitizedValue = parseInt(value, 10);
+        ledValue.textContent = sanitizedValue === 0 ? "LED: Off" : `LED: ${sanitizedValue}%`;
+        // Send throttled update during drag
+        this._sendLedSettingThrottled(entityId, sanitizedValue);
+      },
+      (value) => {
+        // Final update on release
+        this._sendLedSetting(entityId, value);
+      }
+    );
+
+    // Ensure normal input event still updates the display
+    qualitySlider.addEventListener('input', () => {
+      const value = parseInt(qualitySlider.value, 10);
+      if (!isNaN(value)) {
+        qualityValue.textContent = `${value}${value < 30 ? " (Higher quality)" : " (Lower quality)"}`;
+      }
+    });
+    
+    ledSlider.addEventListener('input', () => {
+      const value = parseInt(ledSlider.value, 10);
+      if (!isNaN(value)) {
+        ledValue.textContent = value === 0 ? "LED: Off" : `LED: ${value}%`;
+      }
     });
   }
 
   // Add method to send quality settings
   _sendQualitySettings(entityId, resolution, quality) {
-    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/quality?resolution=${resolution}&quality=${quality}`, {
+    // Проверка на корректность значений
+    if (!resolution || !quality || isNaN(quality)) {
+      console.error('Invalid quality settings:', resolution, quality);
+      return;
+    }
+    
+    // Нормализация значений
+    const sanitizedQuality = parseInt(quality, 10);
+    
+    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/quality?resolution=${resolution}&quality=${sanitizedQuality}`, {
       method: 'GET',
       cache: 'no-store',
     })
     .then(response => {
-      console.log(`Quality updated: ${resolution}, compression: ${quality}`);
+      console.log(`Quality updated: ${resolution}, compression: ${sanitizedQuality}`);
     })
     .catch(error => {
       console.error('Failed to change quality:', error);
@@ -1144,12 +1358,21 @@ class ESP32RobotCard extends LitElement {
 
   // Add method to send LED settings
   _sendLedSetting(entityId, brightness) {
-    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/led?brightness=${brightness}`, {
+    // Проверка на корректность значений
+    if (brightness === undefined || brightness === null || isNaN(brightness)) {
+      console.error('Invalid LED brightness:', brightness);
+      return;
+    }
+    
+    // Нормализация значений
+    const sanitizedBrightness = Math.max(0, Math.min(100, parseInt(brightness, 10)));
+    
+    this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/led?brightness=${sanitizedBrightness}`, {
       method: 'GET',
       cache: 'no-store',
     })
     .then(response => {
-      console.log(`LED brightness set to ${brightness}%`);
+      console.log(`LED brightness set to ${sanitizedBrightness}%`);
     })
     .catch(error => {
       console.error('Failed to control LED:', error);
@@ -1158,6 +1381,12 @@ class ESP32RobotCard extends LitElement {
 
   // Добавляем методы для дросселирования отправки настроек при перетаскивании слайдера
   _sendQualitySettingsThrottled(entityId, resolution, quality) {
+    // Проверка на корректность значений
+    if (!resolution || !quality || isNaN(quality)) {
+      console.error('Invalid throttled quality settings:', resolution, quality);
+      return;
+    }
+    
     // Отменяем предыдущий таймаут, если он был
     if (this._qualityThrottleTimeout) {
       clearTimeout(this._qualityThrottleTimeout);
@@ -1170,6 +1399,12 @@ class ESP32RobotCard extends LitElement {
   }
   
   _sendLedSettingThrottled(entityId, brightness) {
+    // Проверка на корректность значений
+    if (brightness === undefined || brightness === null || isNaN(brightness)) {
+      console.error('Invalid throttled LED brightness:', brightness);
+      return;
+    }
+    
     // Отменяем предыдущий таймаут, если он был
     if (this._ledThrottleTimeout) {
       clearTimeout(this._ledThrottleTimeout);
