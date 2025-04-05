@@ -127,36 +127,33 @@ class ESP32RobotCard extends LitElement {
       }
       
       .control-btn {
-        --mdc-theme-primary: var(--primary-color);
         flex-shrink: 0;
-        font-weight: 500;
-        transition: all 0.2s ease-in-out;
-        border-radius: var(--ha-card-border-radius, 4px);
-        min-width: 36px;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
         height: 36px;
         padding: 0 16px;
         margin-left: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        --mdc-button-horizontal-padding: 0;
-        --mdc-button-outline-width: 0;
-        --mdc-button-height: 36px;
-        --mdc-button-disabled-fill-color: var(--disabled-color);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        text-transform: uppercase;
       }
       
-      .control-btn::before,
-      .control-btn::after {
-        display: none !important;
+      .control-btn[disabled] {
+        background-color: var(--disabled-color, #888888);
+        cursor: not-allowed;
+        opacity: 0.6;
       }
       
-      .control-btn:hover {
+      .control-btn:hover:not([disabled]) {
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         opacity: 0.9;
       }
       
-      .control-btn:active {
+      .control-btn:active:not([disabled]) {
         transform: translateY(1px);
       }
       
@@ -252,16 +249,13 @@ class ESP32RobotCard extends LitElement {
             <span class="ip-value">${ipAddress}</span>
           </div>
           
-          <mwc-button 
+          <button 
             class="control-btn" 
-            raised 
             ?disabled="${!isOnline}" 
             @click="${this._openControlInterface}"
-            style="--mdc-theme-primary: ${isOnline ? 'var(--primary-color)' : 'var(--disabled-color)'}"
-            dense
           >
             CONTROL
-          </mwc-button>
+          </button>
         </div>
         
         ${isOnline && this._entity.attributes.last_error ? html`
@@ -1180,130 +1174,108 @@ class ESP32RobotCard extends LitElement {
   }
   
   _initializeFullscreen(fullscreenButton, dialog) {
-    fullscreenButton.addEventListener('click', () => {
-      // Запрашиваем полноэкранный режим для ДИАЛОГА, а не всего документа
-      // Проверяем, находимся ли мы в полноэкранном режиме
-      const isFullScreen = document.fullscreenElement || 
-                           document.webkitFullscreenElement || 
-                           document.mozFullScreenElement || 
-                           document.msFullscreenElement;
+    // Упрощенная версия обработчика для кнопки полноэкранного режима
+    // Имитирует нажатие клавиши F11 вместо использования Fullscreen API
+    
+    // Переменная для отслеживания состояния полноэкранного режима
+    let isFullscreen = false;
+    
+    // Устанавливаем начальное состояние иконки
+    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
+    
+    // Функция для имитации нажатия F11
+    const toggleFullscreen = () => {
+      // Переключаем состояние
+      isFullscreen = !isFullscreen;
       
-      if (!isFullScreen) {
-        // Запрашиваем полноэкранный режим для диалога (не для documentElement)
-        if (dialog.requestFullscreen) {
-          dialog.requestFullscreen()
-            .then(() => {
-              console.log('Dialog is now fullscreen');
-              // Обеспечиваем видимость и фокус диалога
-              dialog.style.display = 'flex';
-              dialog.style.opacity = '1';
-              dialog.focus();
-            })
-            .catch(err => {
-              console.error('Error attempting to enable fullscreen:', err);
-            });
-        } else if (dialog.mozRequestFullScreen) { // Firefox
-          dialog.mozRequestFullScreen();
-        } else if (dialog.webkitRequestFullscreen) { // Chrome, Safari и Opera
-          dialog.webkitRequestFullscreen();
-        } else if (dialog.msRequestFullscreen) { // IE/Edge
-          dialog.msRequestFullscreen();
-        }
+      // Обновляем иконку
+      fullscreenButton.innerHTML = isFullscreen 
+        ? '<span style="font-size: 20px;">□</span>' 
+        : '<span style="font-size: 20px;">⧉</span>';
+      
+      try {
+        // Создаем и отправляем событие нажатия клавиши F11
+        const keyEvent = new KeyboardEvent('keydown', {
+          key: 'F11',
+          code: 'F11',
+          keyCode: 122,
+          which: 122,
+          bubbles: true,
+          cancelable: true
+        });
         
-        // Изменяем иконку
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-      } else {
-        // Выходим из полноэкранного режима
-        if (document.exitFullscreen) {
-          document.exitFullscreen()
-            .then(() => {
-              // Обеспечиваем видимость диалога после выхода из полноэкранного режима
-              dialog.style.display = 'flex';
-              dialog.style.opacity = '1';
-              dialog.focus();
-            })
-            .catch(err => {
-              console.error('Error exiting fullscreen:', err);
-            });
-        } else if (document.mozCancelFullScreen) {
-          document.mozCancelFullScreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
+        document.dispatchEvent(keyEvent);
+        console.log('F11 keypress event dispatched');
+      } catch (error) {
+        console.log('Could not dispatch F11 event, trying alternative approach');
         
-        // Возвращаем иконку
-        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
+        // Если событие не сработало, пробуем альтернативный подход
+        // через встроенные методы браузера для всего окна
+        if (!isFullscreen) {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+          } else if (document.documentElement.mozRequestFullScreen) {
+            document.documentElement.mozRequestFullScreen();
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          } else if (document.documentElement.msRequestFullscreen) {
+            document.documentElement.msRequestFullscreen();
+          }
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
+        }
+      }
+    };
+    
+    // Добавляем обработчик клика по кнопке
+    fullscreenButton.addEventListener('click', toggleFullscreen);
+    
+    // Добавляем обработчик нажатия клавиши F11 для синхронизации иконки
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'F11' || e.code === 'F11') {
+        isFullscreen = !isFullscreen;
+        fullscreenButton.innerHTML = isFullscreen 
+          ? '<span style="font-size: 20px;">□</span>' 
+          : '<span style="font-size: 20px;">⧉</span>';
       }
     });
     
-    // Обработчик изменения состояния полноэкранного режима
+    // Обработчик для синхронизации состояния, если пользователь использует другие
+    // методы для входа/выхода из полноэкранного режима
     document.addEventListener('fullscreenchange', () => {
-      // После изменения полноэкранного режима, убедимся, что диалог видим
-      setTimeout(() => {
-        dialog.style.display = 'flex';
-        dialog.style.opacity = '1';
-        
-        if (document.fullscreenElement) {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-        } else {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-          // При выходе из полноэкранного режима тоже убедимся, что диалог видим
-          dialog.style.display = 'flex';
-          dialog.style.opacity = '1';
-          dialog.focus();
-        }
-      }, 100); // Небольшая задержка для обеспечения стабильности
+      isFullscreen = !!document.fullscreenElement;
+      fullscreenButton.innerHTML = isFullscreen 
+        ? '<span style="font-size: 20px;">□</span>' 
+        : '<span style="font-size: 20px;">⧉</span>';
     });
     
-    // Аналогично для других префиксов
     document.addEventListener('webkitfullscreenchange', () => {
-      setTimeout(() => {
-        dialog.style.display = 'flex';
-        dialog.style.opacity = '1';
-        
-        if (document.webkitFullscreenElement) {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-        } else {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-          dialog.style.display = 'flex';
-          dialog.style.opacity = '1';
-          dialog.focus();
-        }
-      }, 100);
+      isFullscreen = !!document.webkitFullscreenElement;
+      fullscreenButton.innerHTML = isFullscreen 
+        ? '<span style="font-size: 20px;">□</span>' 
+        : '<span style="font-size: 20px;">⧉</span>';
     });
     
     document.addEventListener('mozfullscreenchange', () => {
-      setTimeout(() => {
-        dialog.style.display = 'flex';
-        dialog.style.opacity = '1';
-        
-        if (document.mozFullScreenElement) {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-        } else {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-          dialog.style.display = 'flex';
-          dialog.style.opacity = '1';
-          dialog.focus();
-        }
-      }, 100);
+      isFullscreen = !!document.mozFullScreenElement;
+      fullscreenButton.innerHTML = isFullscreen 
+        ? '<span style="font-size: 20px;">□</span>' 
+        : '<span style="font-size: 20px;">⧉</span>';
     });
     
     document.addEventListener('MSFullscreenChange', () => {
-      setTimeout(() => {
-        dialog.style.display = 'flex';
-        dialog.style.opacity = '1';
-        
-        if (document.msFullscreenElement) {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
-        } else {
-          fullscreenButton.innerHTML = '<span style="font-size: 20px;">⧉</span>';
-          dialog.style.display = 'flex';
-          dialog.style.opacity = '1';
-          dialog.focus();
-        }
-      }, 100);
+      isFullscreen = !!document.msFullscreenElement;
+      fullscreenButton.innerHTML = isFullscreen 
+        ? '<span style="font-size: 20px;">□</span>' 
+        : '<span style="font-size: 20px;">⧉</span>';
     });
   }
 
