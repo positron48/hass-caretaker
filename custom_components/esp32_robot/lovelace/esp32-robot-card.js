@@ -45,127 +45,125 @@ class ESP32RobotCard extends LitElement {
         border-radius: var(--ha-card-border-radius, 12px);
         box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
         transition: box-shadow 0.3s ease;
+        padding: 16px;
       }
       
       ha-card:hover {
         box-shadow: var(--ha-card-box-shadow-hover, 0 3px 12px rgba(0, 0, 0, 0.25));
       }
 
-      .card-container {
-        padding: 16px;
-      }
-      
-      .header {
+      .card-content {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        margin-bottom: 16px;
+        justify-content: space-between;
+        width: 100%;
       }
       
-      .header h2 {
+      .title-status {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      
+      h2 {
         margin: 0;
         font-size: 1.2rem;
         font-weight: 500;
       }
       
-      .status {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 12px 0;
-      }
-      
-      .status-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.06));
-      }
-      
-      .status-label {
-        font-weight: 500;
-        color: var(--primary-text-color);
-      }
-      
-      .status-value {
-        color: var(--secondary-text-color);
-        font-weight: normal;
-      }
-      
       .status-icon {
-        min-width: 14px;
-        min-height: 14px;
-        width: 14px;
-        height: 14px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
-        margin-right: 8px;
-        transition: all 0.3s ease;
-        box-shadow: 0 0 0 2px var(--card-background-color, #fff);
+        margin-left: 8px;
+        margin-right: 4px;
+        flex-shrink: 0;
       }
       
       .status-icon.online {
         background-color: var(--success-color, #4CAF50);
-        box-shadow: 0 0 8px var(--success-color, #4CAF50);
+        box-shadow: 0 0 5px var(--success-color, #4CAF50);
       }
       
       .status-icon.offline {
         background-color: var(--error-color, #F44336);
       }
-      
-      .attributes {
-        margin-top: 16px;
-      }
-      
-      .attribute {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.06));
-      }
-      
-      .attribute:last-child {
-        border-bottom: none;
-      }
-      
-      .attribute .label {
+
+      .status-text {
+        font-size: 14px;
         font-weight: 500;
+        margin-right: 16px;
+        white-space: nowrap;
+      }
+      
+      .ip-container {
+        margin: 0 8px;
+        flex-grow: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      
+      .ip-label {
+        font-weight: 500;
+        margin-right: 4px;
         color: var(--primary-text-color);
       }
       
-      .attribute .value {
+      .ip-value {
         font-family: var(--paper-font-common-mono);
         font-size: 14px;
         color: var(--secondary-text-color);
         background: var(--secondary-background-color, #f2f2f2);
         padding: 2px 6px;
         border-radius: 4px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       
       .control-btn {
         --mdc-theme-primary: var(--primary-color);
-        width: 100%;
-        margin-top: 16px;
+        flex-shrink: 0;
         font-weight: 500;
-        text-transform: uppercase;
         transition: all 0.2s ease-in-out;
         border-radius: var(--ha-card-border-radius, 4px);
-        height: 46px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        min-width: 36px;
+        height: 36px;
+        padding: 0 16px;
+        margin-left: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       }
       
       .control-btn:hover {
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         opacity: 0.9;
       }
       
       .error {
         color: var(--error-color);
-        margin-top: 12px;
+        margin-top: 8px;
         padding: 8px;
         background-color: var(--error-color, rgba(244, 67, 54, 0.1));
         border-radius: 4px;
         font-size: 14px;
+      }
+      
+      @media (max-width: 500px) {
+        .status-text {
+          display: none;
+        }
+        
+        .ip-label {
+          display: none;
+        }
+        
+        .control-btn {
+          padding: 0 12px;
+        }
       }
     `;
   }
@@ -211,11 +209,9 @@ class ESP32RobotCard extends LitElement {
       return html`
         <ha-card>
           <div class="card-content">
-            <div style="text-align: center; padding: 16px 0;">
-              <ha-icon icon="mdi:alert-circle-outline" style="color: var(--warning-color);"></ha-icon>
-              <div style="margin-top: 8px; color: var(--warning-color);">
-                Entity not found: ${this._config.entity}
-              </div>
+            <h2>ESP32 Robot</h2>
+            <div style="color: var(--warning-color);">
+              Entity not found: ${this._config.entity}
             </div>
           </div>
         </ha-card>
@@ -229,25 +225,15 @@ class ESP32RobotCard extends LitElement {
     return html`
       <ha-card>
         <div class="card-content">
-          <h2 style="margin-top: 0; margin-bottom: 16px; font-weight: 500;">
-            ${this._config.title || 'ESP32 Robot'}
-          </h2>
-          
-          <div class="status">
+          <div class="title-status">
+            <h2>${this._config.title || 'ESP32 Robot'}</h2>
             <div class="status-icon ${isOnline ? 'online' : 'offline'}"></div>
-            <div style="font-weight: 500;">${status}</div>
+            <div class="status-text">${status}</div>
           </div>
           
-          <div class="attributes">
-            <div class="attribute">
-              <div class="label">IP:</div>
-              <div class="value">${ipAddress}</div>
-            </div>
-            ${isOnline && this._entity.attributes.last_error ? html`
-              <div class="error">
-                ${this._entity.attributes.last_error}
-              </div>
-            ` : ''}
+          <div class="ip-container">
+            <span class="ip-label">IP:</span>
+            <span class="ip-value">${ipAddress}</span>
           </div>
           
           <mwc-button 
@@ -257,10 +243,16 @@ class ESP32RobotCard extends LitElement {
             @click="${this._openControlInterface}"
             style="--mdc-theme-primary: ${isOnline ? 'var(--primary-color)' : 'var(--disabled-color)'}"
           >
-            <ha-icon icon="mdi:remote" style="margin-right: 8px;"></ha-icon>
-            Control Interface
+            <ha-icon icon="mdi:remote" style="margin-right: 4px;"></ha-icon>
+            Control
           </mwc-button>
         </div>
+        
+        ${isOnline && this._entity.attributes.last_error ? html`
+          <div class="error">
+            ${this._entity.attributes.last_error}
+          </div>
+        ` : ''}
       </ha-card>
     `;
   }
@@ -409,7 +401,7 @@ class ESP32RobotCard extends LitElement {
     closeButton.title = 'Close';
     closeButton.style.position = 'absolute';
     closeButton.style.top = '20px';
-    closeButton.style.right = '80px'; // Place to the left of fullscreen button
+    closeButton.style.right = '20px'; // Теперь крестик находится справа
     closeButton.style.zIndex = '10';
     closeButton.style.pointerEvents = 'all';
     closeButton.style.background = 'rgba(0, 0, 0, 0.5)';
@@ -439,7 +431,7 @@ class ESP32RobotCard extends LitElement {
     fullscreenButton.title = 'Fullscreen';
     fullscreenButton.style.position = 'absolute';
     fullscreenButton.style.top = '20px';
-    fullscreenButton.style.right = '20px';
+    fullscreenButton.style.right = '80px'; // Теперь кнопка полноэкранного режима левее крестика
     fullscreenButton.style.zIndex = '10';
     fullscreenButton.style.pointerEvents = 'all';
     fullscreenButton.style.background = 'rgba(0, 0, 0, 0.5)';
@@ -456,7 +448,7 @@ class ESP32RobotCard extends LitElement {
     fullscreenButton.style.display = 'flex';
     fullscreenButton.style.alignItems = 'center';
     fullscreenButton.style.justifyContent = 'center';
-    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+    fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>'; // Используем символ из референса
     
     // Settings panel
     const settingsPanel = document.createElement('div');
@@ -847,22 +839,34 @@ class ESP32RobotCard extends LitElement {
         
         videoImg.onerror = (error) => {
           console.error("Stream error:", error);
-          loadingEl.textContent = 'Stream error. Please try again.';
+          // Сбрасываем состояние стрима как при остановке
           this._isStreaming = false;
           streamButton.innerHTML = '<span style="font-size: 20px;">▶</span>';
           streamButton.classList.remove('active');
+          videoImg.src = '';
+          videoImg.style.display = 'none';
           fpsStatus.style.display = 'none';
+          // Показываем одинаковый текст для всех случаев остановки стрима
+          loadingEl.textContent = 'Click Start Stream button';
+          loadingEl.style.display = 'block';
+          
+          // Останавливаем опрос статуса
+          if (this._statusInterval) {
+            clearInterval(this._statusInterval);
+            this._statusInterval = null;
+          }
         };
         
         // Poll for status updates
         this._startStatusPolling(entityId, fpsStatus);
       } catch (error) {
         console.error('Error starting stream:', error);
-        loadingEl.textContent = `Stream error: ${error.message}`;
         this._isStreaming = false;
         streamButton.innerHTML = '<span style="font-size: 20px;">▶</span>';
         streamButton.classList.remove('active');
         fpsStatus.style.display = 'none';
+        // Используем такой же текст и при ошибке инициализации
+        loadingEl.textContent = 'Click Start Stream button';
       }
     };
     
@@ -1152,12 +1156,72 @@ class ESP32RobotCard extends LitElement {
   
   _initializeFullscreen(fullscreenButton, dialog) {
     fullscreenButton.addEventListener('click', () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
+      if (!document.fullscreenElement) {
+        // Проверяем доступность API полноэкранного режима для различных браузеров
+        if (dialog.requestFullscreen) {
+          dialog.requestFullscreen().catch(err => {
+            console.error('Error attempting to enable fullscreen:', err);
+          });
+        } else if (dialog.mozRequestFullScreen) { // Firefox
+          dialog.mozRequestFullScreen();
+        } else if (dialog.webkitRequestFullscreen) { // Chrome, Safari и Opera
+          dialog.webkitRequestFullscreen();
+        } else if (dialog.msRequestFullscreen) { // IE/Edge
+          dialog.msRequestFullscreen();
+        } else {
+          console.warn('Fullscreen API is not supported in this browser');
+        }
+        
+        // Изменяем иконку на "выход из полноэкранного режима"
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
       } else {
-        dialog.requestFullscreen().catch(err => {
-          console.error('Error attempting to enable fullscreen:', err);
-        });
+        // Выходим из полноэкранного режима
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+        
+        // Возвращаем иконку полноэкранного режима
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+      }
+    });
+    
+    // Добавляем обработчик события для отслеживания изменения состояния полноэкранного режима
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+      } else {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+      }
+    });
+    
+    // Поддержка различных префиксов браузеров
+    document.addEventListener('webkitfullscreenchange', () => {
+      if (document.webkitFullscreenElement) {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+      } else {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+      }
+    });
+    
+    document.addEventListener('mozfullscreenchange', () => {
+      if (document.mozFullScreenElement) {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+      } else {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
+      }
+    });
+    
+    document.addEventListener('MSFullscreenChange', () => {
+      if (document.msFullscreenElement) {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">□</span>';
+      } else {
+        fullscreenButton.innerHTML = '<span style="font-size: 20px;">⛶</span>';
       }
     });
   }
