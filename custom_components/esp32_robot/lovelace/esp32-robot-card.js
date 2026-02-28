@@ -35,6 +35,7 @@ class ESP32RobotCard extends LitElement {
   constructor() {
     super();
     this._config = {};
+    this._cleanupListeners = [];
   }
 
   static get styles() {
@@ -272,10 +273,22 @@ class ESP32RobotCard extends LitElement {
     `;
   }
 
+  _addManagedListener(target, type, listener, options = {}) {
+    target.addEventListener(type, listener, options);
+    this._cleanupListeners.push(() => target.removeEventListener(type, listener, options));
+  }
+
+  _clearManagedListeners() {
+    this._cleanupListeners.forEach(cleanup => cleanup());
+    this._cleanupListeners = [];
+  }
+
   _openControlInterface() {
     if (!this._entity || this._entity.state !== 'online') {
       return;
     }
+
+    this._clearManagedListeners();
 
     const entityId = this._entity.entity_id.split(".")[1];
     const title = this._config.title || 'ESP32 Robot';
@@ -362,7 +375,7 @@ class ESP32RobotCard extends LitElement {
     controlsTop.style.display = 'flex';
     controlsTop.style.alignItems = 'center';
     controlsTop.style.gap = '16px';
-    controlsTop.style.pointerEvents = 'all'; // This section captures clicks
+    controlsTop.style.pointerEvents = 'auto'; // This section captures clicks
     controlsTop.style.background = 'rgba(0, 0, 0, 0.5)';
     controlsTop.style.padding = '8px';
     controlsTop.style.borderRadius = '8px';
@@ -418,7 +431,7 @@ class ESP32RobotCard extends LitElement {
     closeButton.style.top = '20px';
     closeButton.style.right = '20px'; // Теперь крестик находится справа
     closeButton.style.zIndex = '10';
-    closeButton.style.pointerEvents = 'all';
+    closeButton.style.pointerEvents = 'auto';
     closeButton.style.background = 'rgba(0, 0, 0, 0.5)';
     closeButton.style.padding = '10px';
     closeButton.style.borderRadius = '8px';
@@ -434,11 +447,17 @@ class ESP32RobotCard extends LitElement {
     closeButton.style.alignItems = 'center';
     closeButton.style.justifyContent = 'center';
     closeButton.innerHTML = '<span style="font-size: 20px;">&times;</span>';
-    closeButton.addEventListener('click', () => {
+    const closeDialog = () => {
       this._stopStream();
-      dialog.close();
-      document.body.removeChild(dialog);
-    });
+      this._clearManagedListeners();
+      if (dialog.open) {
+        dialog.close();
+      }
+      if (document.body.contains(dialog)) {
+        document.body.removeChild(dialog);
+      }
+    };
+    closeButton.addEventListener('click', closeDialog);
     
     // Settings panel
     const settingsPanel = document.createElement('div');
@@ -677,7 +696,7 @@ class ESP32RobotCard extends LitElement {
     controlsRight.style.right = '20px';
     controlsRight.style.top = '50%';
     controlsRight.style.transform = 'translateY(-50%)';
-    controlsRight.style.pointerEvents = 'all';
+    controlsRight.style.pointerEvents = 'auto';
     controlsRight.style.display = 'flex';
     controlsRight.style.flexDirection = 'column';
     controlsRight.style.gap = '16px';
@@ -743,6 +762,10 @@ class ESP32RobotCard extends LitElement {
     // Add dialog to the document
     document.body.appendChild(dialog);
     dialog.showModal();
+    this._addManagedListener(dialog, 'cancel', (e) => {
+      e.preventDefault();
+      closeDialog();
+    });
     
     // Initialize settings panel toggle behavior
     settingsToggle.addEventListener('click', () => {
@@ -794,7 +817,7 @@ class ESP32RobotCard extends LitElement {
     // Initialize functionality
     this._initializeStreaming(entityId, videoImg, loadingEl, streamToggle, fpsStatus);
     this._initializeJoystick(entityId, joystickContainer, joystickHandle);
-    this._initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue);
+    this._initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue, dialog);
   }
   
   _initializeStreaming(entityId, videoImg, loadingEl, streamButton, fpsStatus) {
@@ -976,6 +999,7 @@ class ESP32RobotCard extends LitElement {
     let lastJoystickSendTime = 0;
     let pendingJoystickSend = null;
     const THROTTLE_MS = 100; // Throttle sending commands to 10 times per second
+    joystickHandle.style.touchAction = 'none';
     
     // Function to send joystick data with throttling
     const sendJoystickData = (x, y, force = false) => {
@@ -1002,17 +1026,26 @@ class ESP32RobotCard extends LitElement {
       }
     };
     
+    const getClientPoint = (event) => {
+      if (!event) return null;
+      const point = event.touches?.[0] || event.changedTouches?.[0] || event;
+      if (typeof point.clientX !== 'number' || typeof point.clientY !== 'number') return null;
+      return point;
+    };
+
     // Function to handle joystick movement
     const handleJoystickMove = (event) => {
       if (!isDragging) return;
+      const point = getClientPoint(event);
+      if (!point) return;
       
       const rect = joystickContainer.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
       
       // Get touch or mouse position
-      const clientX = event.clientX || event.touches[0].clientX;
-      const clientY = event.clientY || event.touches[0].clientY;
+      const clientX = point.clientX;
+      const clientY = point.clientY;
       
       // Calculate relative position from center
       let x = clientX - rect.left - centerX;
@@ -1080,80 +1113,73 @@ class ESP32RobotCard extends LitElement {
       }
     };
     
-    // Mouse events for joystick - start dragging on the joystick handle
-    joystickHandle.addEventListener('mousedown', (e) => {
+    // Start dragging from anywhere in joystick container (including the handle)
+    joystickContainer.addEventListener('mousedown', (e) => {
       e.preventDefault();
       isDragging = true;
+      handleJoystickMove(e);
     });
     
-    // Also allow starting drag from anywhere in the joystick container
-    joystickContainer.addEventListener('mousedown', (e) => {
-      if (e.target !== joystickHandle) {
-        e.preventDefault();
-      isDragging = true;
-        handleJoystickMove(e);
-      }
-    });
-    
-    document.addEventListener('mousemove', (e) => {
+    this._addManagedListener(document, 'mousemove', (e) => {
+      if (!isDragging) return;
       e.preventDefault();
       handleJoystickMove(e);
     });
     
-    document.addEventListener('mouseup', (e) => {
-      e.preventDefault();
+    this._addManagedListener(document, 'mouseup', (e) => {
+      if (isDragging && e.cancelable) {
+        e.preventDefault();
+      }
       resetJoystick(true);
     });
     
     // Touch events for joystick
-    joystickHandle.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      isDragging = true;
-      handleJoystickMove(e.touches[0]);
-    }, { passive: false });
-    
     joystickContainer.addEventListener('touchstart', (e) => {
-      if (e.target !== joystickHandle) {
-      e.preventDefault();
+      if (e.touches.length > 0) {
+        if (e.cancelable) e.preventDefault();
         isDragging = true;
         handleJoystickMove(e);
       }
     }, { passive: false });
     
-    document.addEventListener('touchmove', (e) => {
-        e.preventDefault();
+    this._addManagedListener(document, 'touchmove', (e) => {
       if (isDragging && e.touches.length > 0) {
+        if (e.cancelable) e.preventDefault();
         handleJoystickMove(e);
       }
     }, { passive: false });
     
-    document.addEventListener('touchend', (e) => {
-      e.preventDefault();
+    this._addManagedListener(document, 'touchend', (e) => {
+      if (isDragging && e.cancelable) {
+        e.preventDefault();
+      }
       resetJoystick(true);
     }, { passive: false });
     
-    document.addEventListener('touchcancel', (e) => {
-      e.preventDefault();
+    this._addManagedListener(document, 'touchcancel', (e) => {
+      if (isDragging && e.cancelable) {
+        e.preventDefault();
+      }
       resetJoystick(true);
     }, { passive: false });
     
     // Prevent zoom/scrolling on mobile devices
-    document.addEventListener('gesturestart', (e) => {
+    this._addManagedListener(document, 'gesturestart', (e) => {
       e.preventDefault();
     }, { passive: false });
     
-    document.addEventListener('gesturechange', (e) => {
+    this._addManagedListener(document, 'gesturechange', (e) => {
       e.preventDefault();
     }, { passive: false });
     
-    document.addEventListener('gestureend', (e) => {
+    this._addManagedListener(document, 'gestureend', (e) => {
       e.preventDefault();
     }, { passive: false });
   }
 
 
   // Add new method to initialize camera settings
-  _initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue) {
+  _initializeCameraSettings(entityId, resolutionSelect, qualitySlider, qualityValue, ledSlider, ledValue, dialogEl = null) {
     // Get current camera settings
     this._hass.fetchWithAuth(`/api/esp32_robot/proxy/${entityId}/camera/settings`, {
       method: 'GET',
@@ -1161,6 +1187,9 @@ class ESP32RobotCard extends LitElement {
     })
     .then(response => response.json())
     .then(data => {
+      if (dialogEl && !dialogEl.isConnected) {
+        return;
+      }
       console.log('Retrieved camera settings:', data);
       
       // Update resolution select
@@ -1198,6 +1227,9 @@ class ESP32RobotCard extends LitElement {
       this._setupSliderDragEvents(qualitySlider, ledSlider, qualityValue, ledValue, entityId, resolutionSelect);
     })
     .catch(error => {
+      if (dialogEl && !dialogEl.isConnected) {
+        return;
+      }
       console.error('Failed to get camera settings:', error);
       
       // Still set up drag events in case of failure
@@ -1210,10 +1242,19 @@ class ESP32RobotCard extends LitElement {
     // Helper for handling mouse/touch dragging on sliders
     const setupSliderDrag = (slider, valueEl, updateFn, changeFn) => {
       let isDragging = false;
+
+      const getClientX = (e) => {
+        const point = e.touches?.[0] || e.changedTouches?.[0] || e;
+        return point?.clientX;
+      };
       
       const getValueFromEvent = (e) => {
         const rect = slider.getBoundingClientRect();
-        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const clientX = getClientX(e);
+        if (typeof clientX !== 'number') {
+          return parseInt(slider.value, 10);
+        }
+        const x = clientX - rect.left;
         let percent = Math.max(0, Math.min(1, x / rect.width));
         
         const min = parseInt(slider.min, 10);
@@ -1257,8 +1298,8 @@ class ESP32RobotCard extends LitElement {
       };
       
       // Listen for mousemove/touchmove on document
-      document.addEventListener('mousemove', moveHandler);
-      document.addEventListener('touchmove', moveHandler, { passive: false });
+      this._addManagedListener(document, 'mousemove', moveHandler);
+      this._addManagedListener(document, 'touchmove', moveHandler, { passive: false });
       
       // Listen for mouseup/touchend to end dragging
       const endDrag = () => {
@@ -1268,9 +1309,9 @@ class ESP32RobotCard extends LitElement {
         }
       };
       
-      document.addEventListener('mouseup', endDrag);
-      document.addEventListener('touchend', endDrag);
-      document.addEventListener('touchcancel', endDrag);
+      this._addManagedListener(document, 'mouseup', endDrag);
+      this._addManagedListener(document, 'touchend', endDrag);
+      this._addManagedListener(document, 'touchcancel', endDrag);
     };
     
     // Set up quality slider
